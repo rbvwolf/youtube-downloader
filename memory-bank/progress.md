@@ -24,16 +24,16 @@
 - [x] `/download` endpoint'inin oluşturulması (İndirmeyi başlatacak)
 
 ### Phase 3: Frontend Foundations (React Native)
-- [ ] React Native (Expo veya CLI) projesinin başlatılması
-- [ ] React Navigation kurulumu (Tabs & Stack)
-- [ ] Material 3 (Google Stitch) tema standartlarının (renkler, fontlar vb.) tanımlanması
-- [ ] Axios ayarlarının yapılıp Backend ile bağlantının test edilmesi
+- [x] React Native (Expo veya CLI) projesinin başlatılması
+- [x] React Navigation kurulumu (Tabs & Stack)
+- [x] Material 3 (Google Stitch) tema standartlarının (renkler, fontlar vb.) tanımlanması
+- [x] Axios ayarlarının yapılıp Backend ile bağlantının test edilmesi
 
 ### Phase 4: Frontend Core Features & UI
-- [ ] **Ana Ekran (Search Header):** M3 SearchBar, Büyüteç, Kırmızı Mikrofon ve Öneriler (Chips)
-- [ ] **Sesli Arama:** `@react-native-voice/voice` ile bottom-sheet şeklinde mikrofon/dinleniyor ekranı
-- [ ] **Kalite Seçimi:** Video tıklandığında açılan Bottom Sheet ve Radio Button'lar (144p - 4K, MP3)
-- [ ] **İndirme Yöneticisi:** Arka plan indirme (Background Fetch) ve Progress Bar entegrasyonu
+- [x] **Ana Ekran (Search Header):** M3 SearchBar, Büyüteç, Kırmızı Mikrofon ve Öneriler (Chips)
+- [x] **Sesli Arama:** `@react-native-voice/voice` ile bottom-sheet şeklinde mikrofon/dinleniyor ekranı
+- [x] **Kalite Seçimi:** Video tıklandığında açılan Bottom Sheet ve Radio Button'lar (144p - 4K, MP3)
+- [x] **İndirme Yöneticisi:** Arka plan indirme (Background Fetch) ve Progress Bar entegrasyonu
 
 ### Phase 5: Storage, UX Polish & Testing
 - [ ] **Yerel Veritabanı:** İndirme geçmişi için SQLite entegrasyonu

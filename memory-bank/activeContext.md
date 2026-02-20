@@ -1,20 +1,19 @@
 # Active Context
 
 ## Odak Noktası
-Şu an **Phase 2: Backend Development** aşaması tamamlandı ve frontend geçişine hazırlık yapılıyor. 
+Şu an **Phase 5: Storage, UX Polish & Testing** aşamasına geçiliyor. 
 
 ## Son Değişiklikler
-- `backend/main.py` içerisinde FastAPI kullanılarak API iskeleti oluşturuldu.
-- `yt-dlp` entegrasyonu yapılarak YouTube Data API'ye gerek kalmadan arama yapabilen `/search` simülasyonu yazıldı.
-- `/info/{video_id}` endpoint'i ile kalite opsiyonlarını (Video ve Ses) dönen yapı kuruldu.
-- `/download` endpoint'i ve FFmpeg tabanlı birleştirme (1080p, 720p, 480p, audio) arka plan görevlerine bağlandı.
-- İndirmelerin kaydedileceği statik dizin `R:\Code\Youtube-Downloader-Downloads` ayarlandı.
-- Backend gereksinimleri için `requirements.txt` oluşturuldu.
+- Frontend sayfaları oluşturuldu ve backend entegrasyonu sağlandı.
+- Google Stitch HTML tasarımları, React Native bileşenleri olarak (`HomeScreen`, `DownloadsScreen`, `SettingsScreen`) eklendi.
+- Modal ve açılır menüler (`VoiceSearchModal`, `QualitySelectionSheet`, `ClipboardPopup`) tamamlandı.
+- `src/services/Api.js` üzerinden backend API uç noktaları (`/search`, `/info`, `/download`) uygulamaya bağlandı.
+- `package.json`, React Navigation ve NativeWind (Tailwind CSS) yapılandırmaları oluşturuldu.
 
 ## Sonraki Adımlar (Next Steps)
-1. Kullanıcının backend'i kendi ortamında test (virtualenv, FFmpeg kurulu mu kontrolü) etmesi.
-2. Backend doğrulandıktan sonra **Phase 3: Frontend Foundations** kısmına (React Native projelerinin initialization) geçilmesi.
-3. Frontend ve backend'in local ağda IP bazlı iletişiminin ayarlanması.
+1. Local ortamda `npm install` ve `npm run web` / `npm run android` ile testlerin yapılması.
+2. Expo üzerinden SQLite kullanarak indirme geçmişinin kalıcı belleğe (Phase 5) bağlanması.
+3. Arka plan işlemleri (Background Fetch ve Progress Bar animasyonları) test edildikten sonra polishing yapılması.
 
 ## Aktif Kararlar
-- Frontend geliştirilmeye başlamadan önce backend'in stabil çalıştığı kesinleştirilmelidir çünkü video dönüştürme ve API entegrasyonu ana ürün bağlamıdır.
+- React Native projesi manuel yapılandırıldı çünkü bağımlılıklar ve UI iskeleti önceden belirliydi. Son kullanıcı Node paketlerini yükleyip kolayca projeyi ayağa kaldırabilir.

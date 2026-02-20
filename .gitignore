@@ -1,0 +1,7 @@
+node_modules/
+venv/
+.expo/
+__pycache__/
+*.pyc
+backend/__pycache__/
+frontend/node_modules/
