@@ -1,20 +1,20 @@
 # Active Context
 
 ## Odak Noktası
-Şu an **Phase 1: Planning & Initialization** aşamasındayız. Projenin genel hatları, klasör iskeletleri ve temel `memory-bank/` (AGENTS.md kuralları gereği) dökümantasyonları hazırlanmış durumdadır.
+Şu an **Phase 2: Backend Development** aşaması tamamlandı ve frontend geçişine hazırlık yapılıyor. 
 
 ## Son Değişiklikler
-- `memory-bank/` altındaki konfigürasyon ve bağlam dosyaları (`projectbrief.md`, `productContext.md`, `systemPatterns.md`, `techContext.md`, `progress.md`) tamamen oluşturuldu ve birbirleriyle tutarlı bir şekilde bağlandı.
-- Önceden oluşturulan `techStack.md` silinerek yerine doğru standartta olan `techContext.md` geçirildi.
-- Phased (aşamalı) To-Do listesi güncellendi.
-- `backend/` ve `frontend/` boş klasörleri oluşturuldu.
+- `backend/main.py` içerisinde FastAPI kullanılarak API iskeleti oluşturuldu.
+- `yt-dlp` entegrasyonu yapılarak YouTube Data API'ye gerek kalmadan arama yapabilen `/search` simülasyonu yazıldı.
+- `/info/{video_id}` endpoint'i ile kalite opsiyonlarını (Video ve Ses) dönen yapı kuruldu.
+- `/download` endpoint'i ve FFmpeg tabanlı birleştirme (1080p, 720p, 480p, audio) arka plan görevlerine bağlandı.
+- İndirmelerin kaydedileceği statik dizin `R:\Code\Youtube-Downloader-Downloads` ayarlandı.
+- Backend gereksinimleri için `requirements.txt` oluşturuldu.
 
 ## Sonraki Adımlar (Next Steps)
-1. Backend (`Python/FastAPI`) tarafına geçiş yapılacak.
-2. Python sanal ortamının (virtualenv) oluşturulması.
-3. `fastapi`, `uvicorn`, `yt-dlp` kütüphanelerinin yüklenmesi.
-4. Hedeflenen API endpoint'leri (`/search`, `/info`, `/download`) için temel dosyaların (örn: `main.py`) ayağa kaldırılması.
+1. Kullanıcının backend'i kendi ortamında test (virtualenv, FFmpeg kurulu mu kontrolü) etmesi.
+2. Backend doğrulandıktan sonra **Phase 3: Frontend Foundations** kısmına (React Native projelerinin initialization) geçilmesi.
+3. Frontend ve backend'in local ağda IP bazlı iletişiminin ayarlanması.
 
 ## Aktif Kararlar
-- Geliştirme ilk olarak backend üzerinden başlayacak ve `yt-dlp` ile ilgili kritik çekirdek mantıklar doğru oturtulduktan sonra React Native (frontend) inşasına gecilecek.
-- Tasarım açısından Material 3 standartları baz alınmak üzere notlar düşüldü, frontend başladığında bu dizayn sistemi kullanılacak.
+- Frontend geliştirilmeye başlamadan önce backend'in stabil çalıştığı kesinleştirilmelidir çünkü video dönüştürme ve API entegrasyonu ana ürün bağlamıdır.

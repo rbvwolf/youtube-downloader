@@ -17,11 +17,11 @@
 - [x] To-do listesinin `progress.md` içine eklenmesi
 
 ### Phase 2: Backend Development (Python/FastAPI)
-- [ ] Python ortamının (virtualenv) kurulması ve gereksinimlerin (`fastapi`, `uvicorn`, `yt-dlp`, vb.) yüklenmesi
-- [ ] `yt-dlp` ve `FFmpeg` entegrasyonu
-- [ ] `/search` endpoint'inin oluşturulması (Sorgu alıp başlık, thumbnail, ID dönecek)
-- [ ] `/info/{video_id}` endpoint'inin oluşturulması (Videonun kalite formatlarını dönecek)
-- [ ] `/download` endpoint'inin oluşturulması (İndirmeyi başlatacak)
+- [x] Python ortamının (virtualenv) kurulması ve gereksinimlerin (`fastapi`, `uvicorn`, `yt-dlp`, vb.) yüklenmesi (requirements.txt hazırlandı)
+- [x] `yt-dlp` ve `FFmpeg` entegrasyonu (indirme ve birleştirme mantığı kuruldu)
+- [x] `/search` endpoint'inin oluşturulması (Sorgu alıp başlık, thumbnail, ID dönecek)
+- [x] `/info/{video_id}` endpoint'inin oluşturulması (Videonun kalite formatlarını dönecek)
+- [x] `/download` endpoint'inin oluşturulması (İndirmeyi başlatacak)
 
 ### Phase 3: Frontend Foundations (React Native)
 - [ ] React Native (Expo veya CLI) projesinin başlatılması
