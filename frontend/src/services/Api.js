@@ -48,12 +48,14 @@ export default {
         }
     },
 
-    downloadVideo: async (videoId, quality) => {
+    downloadVideo: async (videoId, quality, downloadPath) => {
         try {
-            const response = await api.post('/download', {
+            const body = {
                 video_id: videoId,
                 quality: quality
-            });
+            };
+            if (downloadPath) body.download_path = downloadPath;
+            const response = await api.post('/download', body);
             return response.data;
         } catch (error) {
             console.error("Download API Error:", error);

@@ -28,7 +28,7 @@ export default function SearchResultsScreen({ route, navigation }) {
 
     // Preview
     const [previewVideo, setPreviewVideo] = useState(null);
-    const completedDownloads = useDownloads().completedDownloads;
+    const { completedDownloads, downloadPath } = useDownloads();
 
     // Voice Search
     const [voiceSearchVisible, setVoiceSearchVisible] = useState(false);
@@ -91,7 +91,7 @@ export default function SearchResultsScreen({ route, navigation }) {
         setModalVisible(false);
         showToast(`Starting ${quality === 'audio' ? 'MP3' : 'MP4'} download...`, "info");
         try {
-            await api.downloadVideo(video.id, quality);
+            await api.downloadVideo(video.id, quality, downloadPath);
             showToast(t('downloadSuccess'), "success");
             startSimulation(video, quality);
         } catch (error) {
@@ -140,7 +140,7 @@ export default function SearchResultsScreen({ route, navigation }) {
         recognition.onerror = (e) => {
             console.error("Voice Error", e);
             if (e.error === 'not-allowed') {
-                showToast("Microphone access denied. Please allow it in settings.", "error");
+                showToast(t('micDenied'), "error");
             } else {
                 showToast("Voice search error: " + e.error, "error");
             }

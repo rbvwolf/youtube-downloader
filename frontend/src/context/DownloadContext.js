@@ -9,6 +9,7 @@ export const DownloadProvider = ({ children }) => {
     // Format: { [videoId]: { progress: 0, timeLeft: 20 } }
     const [activeDownloads, setActiveDownloads] = useState({});
     const [completedDownloads, setCompletedDownloads] = useState([]);
+    const [downloadPath, setDownloadPath] = useState('');
 
     // Load from memory
     useEffect(() => {
@@ -16,6 +17,9 @@ export const DownloadProvider = ({ children }) => {
             try {
                 const saved = await AsyncStorage.getItem('@completed_downloads');
                 if (saved) setCompletedDownloads(JSON.parse(saved));
+
+                const savedPath = await AsyncStorage.getItem('@download_path');
+                if (savedPath) setDownloadPath(savedPath);
             } catch (e) {
                 console.error("Failed to load downloads", e);
             }
@@ -23,7 +27,7 @@ export const DownloadProvider = ({ children }) => {
         load();
     }, []);
 
-    // Save to memory
+    // Save completed to memory
     useEffect(() => {
         const save = async () => {
             try {
@@ -32,6 +36,21 @@ export const DownloadProvider = ({ children }) => {
         };
         save();
     }, [completedDownloads]);
+
+    // Save path to memory
+    const updateDownloadPath = async (path) => {
+        setDownloadPath(path);
+        try {
+            await AsyncStorage.setItem('@download_path', path);
+        } catch (e) { }
+    };
+
+    const clearHistory = async () => {
+        setCompletedDownloads([]);
+        try {
+            await AsyncStorage.removeItem('@completed_downloads');
+        } catch (e) { }
+    };
 
     const startSimulation = (video, quality) => {
         // Prevent duplicate simulation
@@ -78,7 +97,7 @@ export const DownloadProvider = ({ children }) => {
     };
 
     return (
-        <DownloadContext.Provider value={{ activeDownloads, completedDownloads, startSimulation }}>
+        <DownloadContext.Provider value={{ activeDownloads, completedDownloads, downloadPath, updateDownloadPath, clearHistory, startSimulation }}>
             {children}
         </DownloadContext.Provider>
     );

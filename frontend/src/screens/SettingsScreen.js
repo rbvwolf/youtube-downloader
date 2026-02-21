@@ -2,10 +2,17 @@ import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { useDownloads } from '../context/DownloadContext';
+import { useToast } from '../context/ToastContext';
 
 export default function SettingsScreen() {
     const { theme, themePref, setAppTheme, language, setAppLanguage, setFontSize, t } = useTheme();
+    const { downloadPath, updateDownloadPath, clearHistory } = useDownloads();
+    const { showToast } = useToast();
     const styles = useMemo(() => createStyles(theme), [theme]);
+
+    const [pathModalVisible, setPathModalVisible] = React.useState(false);
+    const [tempPath, setTempPath] = React.useState('');
 
     return (
         <SafeAreaView style={styles.container}>
@@ -27,9 +34,9 @@ export default function SettingsScreen() {
                             </View>
                             <View style={styles.flex1}>
                                 <Text style={styles.titleText}>{t('downloadLocation')}</Text>
-                                <Text style={styles.subText}>/Documents/Downloads/</Text>
+                                <Text style={styles.subText} numberOfLines={1}>{downloadPath || 'Varsayılan (Default)'}</Text>
                             </View>
-                            <TouchableOpacity style={[styles.actionBtn, { cursor: 'pointer' }]}>
+                            <TouchableOpacity style={[styles.actionBtn, { cursor: 'pointer' }]} onPress={() => { setTempPath(downloadPath); setPathModalVisible(true); }}>
                                 <Text style={styles.actionBtnText}>{t('change')}</Text>
                             </TouchableOpacity>
                         </View>
@@ -125,7 +132,7 @@ export default function SettingsScreen() {
 
                     <Text style={styles.sectionTitle}>{t('dataManagement')}</Text>
                     <View style={styles.card}>
-                        <TouchableOpacity style={[styles.row, { cursor: 'pointer' }]}>
+                        <TouchableOpacity style={[styles.row, { cursor: 'pointer' }]} onPress={() => { clearHistory(); showToast('History cleared', 'success'); }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 <View style={[styles.circleIconSmall, { backgroundColor: theme.dangerBg }]}>
                                     <MaterialIcons name="auto-delete" size={20} color={theme.danger} />
@@ -143,6 +150,32 @@ export default function SettingsScreen() {
                     <View style={{ height: 40 }} />
                 </ScrollView>
             </View>
+
+            {/* Download Path Modal */}
+            {pathModalVisible && (
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                        <Text style={[styles.modalTitle, { color: theme.text }]}>{t('downloadLocation')}</Text>
+                        <Text style={styles.modalSubtitle}>{t('enterPath')}</Text>
+                        <React.native.TextInput
+                            style={[styles.textInput, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
+                            value={tempPath}
+                            onChangeText={setTempPath}
+                            placeholder="C:\Users\Name\Downloads"
+                            placeholderTextColor={theme.iconInactive}
+                        />
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity style={[styles.modalBtn, { backgroundColor: theme.chipInactiveBg }]} onPress={() => setPathModalVisible(false)}>
+                                <Text style={[styles.modalBtnText, { color: theme.text }]}>{t('cancel')}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.modalBtn, { backgroundColor: theme.primary }]} onPress={() => { updateDownloadPath(tempPath); setPathModalVisible(false); }}>
+                                <Text style={[styles.modalBtnText, { color: '#fff' }]}>Kaydet</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            )}
+
         </SafeAreaView>
     );
 }
@@ -177,6 +210,14 @@ const createStyles = (theme) => {
         segmentTextActive: { fontSize: s(14), fontWeight: '700', color: theme.primary },
         footer: { alignItems: 'center', marginTop: 16, marginBottom: 32 },
         footerText: { fontSize: s(12), fontWeight: '600', color: theme.iconInactive },
-        footerSubText: { fontSize: s(10), color: theme.iconInactive, marginTop: 4 }
+        footerSubText: { fontSize: s(10), color: theme.iconInactive, marginTop: 4 },
+        modalOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', zIndex: 100 },
+        modalContent: { width: '90%', maxWidth: 400, padding: 24, borderRadius: 16, borderWidth: 1 },
+        modalTitle: { fontSize: s(18), fontWeight: 'bold', marginBottom: 8 },
+        modalSubtitle: { fontSize: s(14), color: theme.subText, marginBottom: 16 },
+        textInput: { height: 48, borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, fontSize: s(14), marginBottom: 24 },
+        modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
+        modalBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8, cursor: 'pointer' },
+        modalBtnText: { fontSize: s(14), fontWeight: '600' }
     });
 };

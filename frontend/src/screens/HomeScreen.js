@@ -42,7 +42,7 @@ export default function HomeScreen({ navigation }) {
 
     // Preview
     const [previewVideo, setPreviewVideo] = useState(null);
-    const completedDownloads = useDownloads().completedDownloads;
+    const { completedDownloads, downloadPath } = useDownloads();
 
     useEffect(() => {
         loadRecentSearches();
@@ -179,7 +179,7 @@ export default function HomeScreen({ navigation }) {
         recognition.onerror = (e) => {
             console.error("Voice Error", e);
             if (e.error === 'not-allowed') {
-                showToast("Microphone access denied. Please allow it in settings.", "error");
+                showToast(t('micDenied'), "error");
             } else {
                 showToast("Voice search error: " + e.error, "error");
             }
@@ -208,7 +208,7 @@ export default function HomeScreen({ navigation }) {
     const handleQuickDownload = async (video, quality) => {
         showToast(`Starting ${quality === 'audio' ? 'MP3' : 'MP4'} download...`, "info");
         try {
-            await api.downloadVideo(video.id, quality);
+            await api.downloadVideo(video.id, quality, downloadPath);
             showToast(t('downloadSuccess'), "success");
             startSimulation(video, quality);
         } catch (error) {

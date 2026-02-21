@@ -1,11 +1,14 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useToast } from '../context/ToastContext';
 
 export default function LocalPlayerModal({ visible, item, onClose, theme, t }) {
+    const { showToast } = useToast();
+
     if (!item || !item.filename) return null;
 
-    const fileUrl = `http://127.0.0.1:8000/downloads/${encodeURIComponent(item.filename)}`;
+    const fileUrl = `http://127.0.0.1:8000/play?filepath=${encodeURIComponent(item.filename)}`;
     const isAudio = item.quality === 'audio';
 
     return (
@@ -27,9 +30,9 @@ export default function LocalPlayerModal({ visible, item, onClose, theme, t }) {
                     <View style={[styles.playerContainer, isAudio && { aspectRatio: 'auto', padding: 20 }]}>
                         {Platform.OS === 'web' ? (
                             isAudio ? (
-                                <audio controls src={fileUrl} style={{ width: '100%', outline: 'none' }} autoPlay />
+                                <audio controls src={fileUrl} style={{ width: '100%', outline: 'none' }} autoPlay onError={() => { showToast(t('fileNotFound'), 'error'); onClose(); }} />
                             ) : (
-                                <video controls src={fileUrl} style={{ width: '100%', height: '100%', outline: 'none' }} autoPlay />
+                                <video controls src={fileUrl} style={{ width: '100%', height: '100%', outline: 'none' }} autoPlay onError={() => { showToast(t('fileNotFound'), 'error'); onClose(); }} />
                             )
                         ) : (
                             <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>

@@ -1,7 +1,9 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from typing import Optional
 import yt_dlp
 import os
 import re
@@ -27,6 +29,7 @@ app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 class DownloadRequest(BaseModel):
     video_id: str
     quality: str  # Beklenen değerler: '1080p', '720p', '480p', 'audio'
+    download_path: Optional[str] = None
 
 @app.get("/search")
 async def search(q: str, max_results: int = 10):
@@ -116,11 +119,14 @@ async def get_info(video_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-def download_video_sync(video_id: str, quality: str):
+def download_video_sync(video_id: str, quality: str, download_path: str = None):
     """
     Arka planda çalışan yt-dlp indirme ve ffmpeg birleştirme fonksiyonu.
     """
     url = f"https://www.youtube.com/watch?v={video_id}"
+    
+    actual_dir = download_path if download_path else DOWNLOAD_DIR
+    os.makedirs(actual_dir, exist_ok=True)
     
     ydl_opts: dict = {
         'quiet': False,
@@ -156,15 +162,20 @@ def download_video_sync(video_id: str, quality: str):
         elif d['status'] == 'finished':
             try:
                 import json
-                final_filename = os.path.basename(d.get('filename', ''))
+                original_filepath = d.get('filename', '')
+                actual_d = os.path.dirname(original_filepath)
+                final_filename = os.path.basename(original_filepath)
+                
                 # Mirror the replacements done by the Exec post-processor
                 final_filename = final_filename.replace('.mpg.mp3', '.mp3').replace('.mp4.mp3', '.mp3')
                 import re
                 final_filename = re.sub(r'\.mpg (\d+p)\.mp4', r' \1.mp4', final_filename)
                 final_filename = re.sub(r'\.mp4 (\d+p)\.mp4', r' \1.mp4', final_filename)
                 
+                final_filepath = os.path.join(actual_d, final_filename)
+                
                 with open(progress_file, 'w') as f:
-                    json.dump({"progress": "100", "speed": "Done", "eta": 0, "completed": True, "filename": final_filename}, f)
+                    json.dump({"progress": "100", "speed": "Done", "eta": 0, "completed": True, "filename": final_filepath}, f)
             except:
                 pass
 
@@ -176,7 +187,7 @@ def download_video_sync(video_id: str, quality: str):
     
     if quality == 'audio':
         # Sadece ses modunda mp3'e çevirme işlemi (FFmpeg kullanır)
-        ydl_opts['outtmpl'] = os.path.join(DOWNLOAD_DIR, '%(title)s.%(ext)s')
+        ydl_opts['outtmpl'] = os.path.join(actual_dir, '%(title)s.%(ext)s')
         ydl_opts['format'] = 'bestaudio/best'
         ydl_opts['postprocessors'] = [{
             'key': 'FFmpegExtractAudio',
@@ -192,7 +203,7 @@ def download_video_sync(video_id: str, quality: str):
         # Video kalitelerinde donanım uyumluluğu (Opus codec sorunu vb.) için m4a/aac ve mp4 eşleşmesi
         height = quality.replace('p', '')
         # User requested: "Başlık 1080p.mp4"
-        ydl_opts['outtmpl'] = os.path.join(DOWNLOAD_DIR, f'%(title)s {quality}.%(ext)s')
+        ydl_opts['outtmpl'] = os.path.join(actual_dir, f'%(title)s {quality}.%(ext)s')
         ydl_opts['format'] = f'bestvideo[ext=mp4][height<={height}]+bestaudio[ext=m4a]/best[ext=mp4]/best'
         ydl_opts['merge_output_format'] = 'mp4'
         ydl_opts['postprocessors'] = [{
@@ -217,12 +228,12 @@ async def download(request: DownloadRequest, background_tasks: BackgroundTasks):
     """
     FastAPI Background Tasks kullanarak indirmeyi başlatır.
     """
-    background_tasks.add_task(download_video_sync, request.video_id, request.quality)
+    background_tasks.add_task(download_video_sync, request.video_id, request.quality, request.download_path)
     return {
         "status": "success",
         "message": f"İndirme işlemi ({request.quality}) arka planda başlatıldı.",
         "video_id": request.video_id,
-        "download_directory": DOWNLOAD_DIR
+        "download_directory": request.download_path or DOWNLOAD_DIR
     }
 
 @app.get("/video-info")
@@ -277,3 +288,9 @@ async def get_progress(video_id: str):
         except:
              return {"progress": 0, "speed": "0.0 MB/s", "eta": 0}
     return {"progress": 0, "speed": "0.0 MB/s", "eta": 0}
+
+@app.get("/play")
+async def play_local_file(filepath: str):
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(filepath)

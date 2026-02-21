@@ -61,7 +61,10 @@ export const translations = {
         downloadSuccess: "Download started successfully!",
         downloadError: "Failed to start download.",
         voiceNotSupportedBrowser: "Voice search is not supported in your browser.",
-        voiceNotSupportedPlatform: "Voice search is only supported on web currently."
+        voiceNotSupportedPlatform: "Voice search is only supported on web currently.",
+        micDenied: "Microphone access denied. Please allow it in settings.",
+        fileNotFound: "File not found or deleted from computer.",
+        enterPath: "Enter absolute path (e.g., C:\\Downloads)"
     },
     tr: {
         // Tabs
@@ -125,6 +128,9 @@ export const translations = {
         downloadSuccess: "İndirme başarıyla başlatıldı!",
         downloadError: "İndirme başlatılamadı.",
         voiceNotSupportedBrowser: "Tarayıcınız sesli aramayı desteklemiyor.",
-        voiceNotSupportedPlatform: "Sesli arama şu an sadece web'de destekleniyor."
+        voiceNotSupportedPlatform: "Sesli arama şu an sadece web'de destekleniyor.",
+        micDenied: "Mikrofon izni reddedildi. Lütfen ayarlardan izin verin.",
+        fileNotFound: "Dosya bilgisayarda bulunamadı veya silinmiş.",
+        enterPath: "Tam yolu girin (Örn: C:\\Indirilenler)"
     }
 };

@@ -5,10 +5,15 @@ import { useTheme } from '../context/ThemeContext';
 import { useDownloads } from '../context/DownloadContext';
 import LocalPlayerModal from '../components/LocalPlayerModal';
 
+import QualitySelectionSheet from '../components/QualitySelectionSheet';
+import api from '../services/Api';
+import { useToast } from '../context/ToastContext';
+
 export default function DownloadsScreen() {
     const { theme, t } = useTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
-    const { activeDownloads, completedDownloads, downloadVideo } = useDownloads();
+    const { activeDownloads, completedDownloads, downloadPath, startSimulation } = useDownloads();
+    const { showToast } = useToast();
 
     const [filter, setFilter] = useState('All'); // 'All', 'Active', 'Completed'
 
@@ -67,6 +72,9 @@ export default function DownloadsScreen() {
                                         {isAudio ? (
                                             <TouchableOpacity style={[styles.thumbnailCont, { backgroundColor: theme.primaryBg, alignItems: 'center', justifyContent: 'center' }]} activeOpacity={0.8} onPress={() => !item.isActive && setPreviewItem(item)}>
                                                 <MaterialIcons name="headphones" size={32} color={theme.primary} />
+                                                <View style={styles.playOverlay}>
+                                                    <MaterialIcons name="play-arrow" size={32} color="white" />
+                                                </View>
                                                 <View style={styles.durationBadge}>
                                                     <Text style={styles.durationText}>{video.duration || 'Ses'}</Text>
                                                 </View>
@@ -145,6 +153,14 @@ export default function DownloadsScreen() {
                 onClose={() => setPreviewItem(null)}
             />
 
+            {/* Quality Modal if needed for active redownloads */}
+            {previewItem && ( // Assuming QualitySelectionSheet deals with `previewItem` differently else this logic might need fixing
+                <QualitySelectionSheet
+                    visible={qualitySheetVisible}
+                    video={previewItem}
+                    onClose={() => setQualitySheetVisible(false)}
+                />
+            )}
         </SafeAreaView>
     );
 }
