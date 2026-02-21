@@ -25,6 +25,7 @@ export default function HomeScreen({ navigation }) {
     const [searchQuery, setSearchQuery] = useState('');
     const [suggestions, setSuggestions] = useState([]);
     const [isListening, setIsListening] = useState(false);
+    const [isSearchFocused, setIsSearchFocused] = useState(false);
 
     const [trendingVideos, setTrendingVideos] = useState([]);
     const [loadingTrending, setLoadingTrending] = useState(false);
@@ -236,7 +237,7 @@ export default function HomeScreen({ navigation }) {
             <View style={styles.contentContainer}>
                 {/* Search Header */}
                 <View style={styles.searchHeaderContainer}>
-                    <View style={{ zIndex: 10 }}>
+                    <View style={{ zIndex: 10, overflow: 'visible' }}>
                         <View style={styles.searchBar}>
                             <View style={styles.searchIconContainer}>
                                 <MaterialIcons name="search" size={24} color={theme.iconInactive} />
@@ -248,6 +249,8 @@ export default function HomeScreen({ navigation }) {
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
                                 onSubmitEditing={() => handleSearch(searchQuery)}
+                                onFocus={() => setIsSearchFocused(true)}
+                                onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
                                 returnKeyType="search"
                             />
                             {searchQuery.length > 0 && (
@@ -263,17 +266,22 @@ export default function HomeScreen({ navigation }) {
                             </TouchableOpacity>
                         </View>
 
-                        {/* Suggestions Dropdown */}
-                        {suggestions.length > 0 && (
-                            <View style={styles.suggestionsContainer}>
+                        {/* Suggestions Dropdown - only when focused and have results */}
+                        {isSearchFocused && suggestions.length > 0 && (
+                            <View style={[styles.suggestionsContainer, { zIndex: 9999 }]}>
                                 {suggestions.map((item, index) => (
                                     <TouchableOpacity
                                         key={index}
                                         style={[styles.suggestionItem, { cursor: 'pointer' }]}
-                                        onPress={() => handleSearch(item)}
+                                        onPress={() => {
+                                            setSuggestions([]);
+                                            setIsSearchFocused(false);
+                                            handleSearch(item);
+                                        }}
                                     >
-                                        <MaterialIcons name="history" size={20} color={theme.iconInactive} style={{ marginRight: 12 }} />
+                                        <MaterialIcons name="search" size={18} color={theme.iconInactive} style={{ marginRight: 12 }} />
                                         <Text style={styles.suggestionText}>{item}</Text>
+                                        <MaterialIcons name="north-west" size={16} color={theme.iconInactive} style={{ marginLeft: 'auto' }} />
                                     </TouchableOpacity>
                                 ))}
                             </View>

@@ -66,40 +66,37 @@ export const DownloadProvider = ({ children }) => {
     };
 
     const startSimulation = (video, quality) => {
-        // Prevent duplicate simulation
+        // Prevent duplicate
         if (activeDownloads[video.id]) return;
-
-        let progress = 0;
-        let timeLeft = 25; // simulate 25 seconds download
 
         setActiveDownloads(prev => ({
             ...prev,
-            [video.id]: { progress, timeLeft, video, quality }
+            [video.id]: { progress: 0, timeLeft: 0, speed: '--', video, quality }
         }));
 
         const interval = setInterval(async () => {
             const data = await api.getDownloadProgress(video.id);
             if (!data) return;
 
-            let currentProgress = parseFloat(data.progress || 0);
-            let timeRemaining = data.eta || 0;
-            let currentSpeed = data.speed || '0.0 MB/s';
+            const currentProgress = parseFloat(data.progress || 0);
+            const timeRemaining = data.eta || 0;
+            const currentSpeed = data.speed || '0.0 MB/s';
 
-            if (data.completed || currentProgress >= 100) {
+            // Only complete when backend explicitly says so AND filename is present
+            if (data.completed === true && data.filename) {
                 clearInterval(interval);
-
                 setTimeout(() => {
                     setActiveDownloads(prev => {
-                        const newAcc = { ...prev };
-                        delete newAcc[video.id];
-                        return newAcc;
+                        const copy = { ...prev };
+                        delete copy[video.id];
+                        return copy;
                     });
                     setCompletedDownloads(prev => {
                         if (prev.some(d => d.id === video.id && d.quality === quality)) return prev;
-                        const newItem = { ...video, quality, downloadedAt: new Date().toISOString(), filename: data.filename };
-                        return [newItem, ...prev];
+                        return [{ ...video, quality, downloadedAt: new Date().toISOString(), filename: data.filename }, ...prev];
                     });
                 }, 1000);
+                return;
             }
 
             setActiveDownloads(prev => ({

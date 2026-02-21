@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, StyleSheet, TextInput, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, StyleSheet, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
@@ -15,40 +15,29 @@ export default function SettingsScreen() {
     const { clearRecentSearches } = useSearchHistory();
     const styles = useMemo(() => createStyles(theme), [theme]);
 
-    const [pathModalVisible, setPathModalVisible] = React.useState(false);
-    const [tempPath, setTempPath] = React.useState('');
-
     const handlePickDirectory = async () => {
-        if (Platform.OS === 'web' && window.showDirectoryPicker) {
+        if (Platform.OS === 'web') {
             try {
-                const dirHandle = await window.showDirectoryPicker();
-                showToast(`Selected directory: ${dirHandle.name}. Please ensure this is an absolute path.`, 'info');
-                setTempPath(`C:\\Users\\Name\\${dirHandle.name}`);
-                setPathModalVisible(true);
+                const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+                showToast(`"${dirHandle.name}" klasörü seçildi. Backend'in bu dizine erişebildiğinden emin olun.`, 'info');
             } catch (err) {
-                console.log('Directory picker cancelled or failed', err);
-                setTempPath(downloadPath);
-                setPathModalVisible(true);
+                if (err.name !== 'AbortError') {
+                    showToast('Klasör seçimi başarısız. Tarayıcınız desteklemiyor olabilir.', 'error');
+                }
             }
         } else if (Platform.OS === 'android') {
             try {
                 const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
                 if (permissions.granted) {
-                    const uri = permissions.directoryUri;
-                    setTempPath(uri);
-                    setPathModalVisible(true);
-                } else {
-                    setTempPath(downloadPath);
-                    setPathModalVisible(true);
+                    await updateDownloadPath(permissions.directoryUri);
+                    showToast('İndirme klasörü güncellendi.', 'success');
                 }
             } catch (err) {
-                console.error("Failed to pick directory", err);
-                setTempPath(downloadPath);
-                setPathModalVisible(true);
+                console.error('Failed to pick directory', err);
+                showToast('Klasör seçimi başarısız.', 'error');
             }
         } else {
-            setTempPath(downloadPath);
-            setPathModalVisible(true);
+            showToast('Bu platformda klasör seçici desteklenmiyor.', 'info');
         }
     };
 
@@ -192,31 +181,6 @@ export default function SettingsScreen() {
                     <View style={{ height: 40 }} />
                 </ScrollView>
             </View>
-
-            {/* Download Path Modal */}
-            {pathModalVisible && (
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                        <Text style={[styles.modalTitle, { color: theme.text }]}>{t('downloadLocation')}</Text>
-                        <Text style={styles.modalSubtitle}>{t('enterPath')}</Text>
-                        <TextInput
-                            style={[styles.textInput, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
-                            value={tempPath}
-                            onChangeText={setTempPath}
-                            placeholder="C:\Users\Name\Downloads"
-                            placeholderTextColor={theme.iconInactive}
-                        />
-                        <View style={styles.modalActions}>
-                            <TouchableOpacity style={[styles.modalBtn, { backgroundColor: theme.chipInactiveBg }]} onPress={() => setPathModalVisible(false)}>
-                                <Text style={[styles.modalBtnText, { color: theme.text }]}>{t('cancel')}</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={[styles.modalBtn, { backgroundColor: theme.primary }]} onPress={() => { updateDownloadPath(tempPath); setPathModalVisible(false); }}>
-                                <Text style={[styles.modalBtnText, { color: '#fff' }]}>Kaydet</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </View>
-            )}
 
         </SafeAreaView>
     );

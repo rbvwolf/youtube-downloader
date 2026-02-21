@@ -4,9 +4,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useDownloads } from '../context/DownloadContext';
 import LocalPlayerModal from '../components/LocalPlayerModal';
-
-import QualitySelectionSheet from '../components/QualitySelectionSheet';
-import api from '../services/Api';
 import { useToast } from '../context/ToastContext';
 
 export default function DownloadsScreen() {
@@ -19,7 +16,6 @@ export default function DownloadsScreen() {
 
     // Preview modal states
     const [previewItem, setPreviewItem] = useState(null);
-    const [qualitySheetVisible, setQualitySheetVisible] = useState(false);
 
     const activeList = Object.values(activeDownloads).map(d => ({ ...d, isActive: true }));
     const completedList = completedDownloads.map(d => ({ ...d, isActive: false }));
@@ -67,7 +63,14 @@ export default function DownloadsScreen() {
                             const video = item.video || item;
 
                             return (
-                                <TouchableOpacity key={idx} style={[styles.card, { cursor: 'pointer' }]} activeOpacity={0.9}>
+                                <TouchableOpacity
+                                    key={idx}
+                                    style={[styles.card, { cursor: 'pointer' }]}
+                                    activeOpacity={0.9}
+                                    onPress={() => {
+                                        if (!item.isActive) setPreviewItem(item);
+                                    }}
+                                >
                                     <View style={{ flexDirection: 'row' }}>
                                         {/* Thumbnail */}
                                         {isAudio ? (
@@ -156,14 +159,6 @@ export default function DownloadsScreen() {
                 onClose={() => setPreviewItem(null)}
             />
 
-            {/* Quality Modal if needed for active redownloads */}
-            {previewItem && ( // Assuming QualitySelectionSheet deals with `previewItem` differently else this logic might need fixing
-                <QualitySelectionSheet
-                    visible={qualitySheetVisible}
-                    video={previewItem}
-                    onClose={() => setQualitySheetVisible(false)}
-                />
-            )}
         </SafeAreaView>
     );
 }

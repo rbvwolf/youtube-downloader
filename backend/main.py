@@ -71,15 +71,21 @@ async def get_suggestions(q: str):
     import requests
     import json
     try:
-        url = f"http://suggestqueries.google.com/complete/search?client=youtube&ds=yt&client=firefox&q={q}"
-        response = requests.get(url, timeout=5)
+        url = f"http://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q={q}"
+        response = requests.get(url, timeout=5, headers={'Accept-Language': 'tr-TR,tr;q=0.9'})
         if response.status_code == 200:
             data = response.json()
             if len(data) > 1:
-                return {"suggestions": data[1]}
+                suggestions = [s for s in data[1] if isinstance(s, str)]
+                return {"suggestions": suggestions[:10]}
         return {"suggestions": []}
     except Exception as e:
         return {"suggestions": []}
+
+# Alias for frontend compatibility
+@app.get("/suggest")
+async def suggest_alias(q: str):
+    return await get_suggestions(q)
 
 @app.get("/info/{video_id}")
 async def get_info(video_id: str):
@@ -153,10 +159,10 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
     ydl_opts: dict = {
         'quiet': False,
         'noplaylist': True,
-        'concurrent_fragment_downloads': 10,
-        'http_chunk_size': 10485760,
         'retries': 10,
         'fragment_retries': 10,
+        'source_address': '0.0.0.0',   # Force IPv4, avoids YouTube IPv6 throttling
+        'nocheckcertificate': True,    # Skip SSL cert check for stability
     }
 
     progress_file = os.path.join(DOWNLOAD_DIR, f"{video_id}_progress.json")
@@ -210,11 +216,11 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
                 
                 with open(progress_file, 'w') as f:
                     json.dump({"progress": "100", "speed": "Done", "eta": 0, "completed": True, "filename": final_filepath}, f)
-                # Clean up the progress file after short delay (frontend reads it one last time)
+                # Keep the progress file alive for 15s so frontend can reliably read completed+filename
                 import threading
                 def _cleanup():
                     import time
-                    time.sleep(3)
+                    time.sleep(15)
                     try:
                         if os.path.exists(progress_file):
                             os.remove(progress_file)
@@ -273,11 +279,17 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
     finally:
         if video_id in active_downloads:
             del active_downloads[video_id]
-        # Remove leftover progress file (cancelled or errored downloads)
-        try:
-            if os.path.exists(progress_file):
-                os.remove(progress_file)
-        except: pass
+        # NOTE: progress file cleanup is handled by the 3s timer in the 'finished' hook.
+        # For cancelled/errored downloads, delete after a short delay so frontend can read the final error state.
+        import threading
+        def _cleanup_on_cancel():
+            import time
+            time.sleep(5)
+            try:
+                if os.path.exists(progress_file):
+                    os.remove(progress_file)
+            except: pass
+        threading.Thread(target=_cleanup_on_cancel, daemon=True).start()
 
 @app.post("/cancel/{video_id}")
 async def cancel_download(video_id: str):
