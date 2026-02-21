@@ -6,7 +6,7 @@ import { useTheme as useAppTheme } from '../context/ThemeContext';
 
 export default function VideoCard({ video, theme, onDownload, onMoreInfo, onPlay }) {
     const styles = useMemo(() => createStyles(theme), [theme]);
-    const { activeDownloads, completedDownloads } = useDownloads();
+    const { activeDownloads, completedDownloads, cancelDownload } = useDownloads();
     const { t } = useAppTheme();
 
     const isAudioCompleted = completedDownloads.some(d => d.id === video.id && d.quality === 'audio');
@@ -59,7 +59,7 @@ export default function VideoCard({ video, theme, onDownload, onMoreInfo, onPlay
                                 { cursor: 'pointer' },
                                 isAudioCompleted && { backgroundColor: `${GREEN_COLOR}20` }
                             ]}
-                            onPress={() => onDownload('audio')}
+                            onPress={() => isAudioCompleted ? onPlay({ ...video, quality: 'audio' }) : onDownload('audio')}
                             activeOpacity={0.7}
                             accessibilityLabel={isAudioCompleted ? `${t('downloaded')} MP3` : 'Download MP3'}
                             accessibilityRole="button"
@@ -74,7 +74,7 @@ export default function VideoCard({ video, theme, onDownload, onMoreInfo, onPlay
                                 { cursor: 'pointer' },
                                 isVideoCompleted && { backgroundColor: `${GREEN_COLOR}20` }
                             ]}
-                            onPress={() => onDownload('1080p')}
+                            onPress={() => isVideoCompleted ? onPlay({ ...video, quality: '1080p' }) : onDownload('1080p')}
                             activeOpacity={0.7}
                             accessibilityLabel={isVideoCompleted ? `${t('downloaded')} MP4` : 'Download MP4'}
                             accessibilityRole="button"
@@ -104,13 +104,23 @@ export default function VideoCard({ video, theme, onDownload, onMoreInfo, onPlay
                             <View style={styles.progressBarTrack}>
                                 <View style={[styles.progressBarFill, { width: `${activeData.progress}%` }]} />
                             </View>
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                                <Text style={styles.progressTimeLeft}>
-                                    ~{activeData.timeLeft}s left
-                                </Text>
-                                <Text style={styles.progressSpeed} importantForAccessibility="no">
-                                    {activeData.speed}
-                                </Text>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                    <Text style={styles.progressTimeLeft}>
+                                        ~{activeData.timeLeft}s left
+                                    </Text>
+                                    <Text style={[styles.progressSpeed, { marginLeft: 8 }]} importantForAccessibility="no">
+                                        {activeData.speed}
+                                    </Text>
+                                </View>
+                                <TouchableOpacity
+                                    onPress={() => cancelDownload(video.id)}
+                                    style={{ padding: 4, backgroundColor: theme.dangerBg, borderRadius: 12 }}
+                                    activeOpacity={0.7}
+                                    accessibilityLabel="Cancel download"
+                                >
+                                    <MaterialIcons name="close" size={16} color={theme.danger} />
+                                </TouchableOpacity>
                             </View>
                         </View>
                     )}

@@ -12,7 +12,7 @@ import { useToast } from '../context/ToastContext';
 export default function DownloadsScreen() {
     const { theme, t } = useTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
-    const { activeDownloads, completedDownloads, downloadPath, startSimulation, clearHistory } = useDownloads();
+    const { activeDownloads, completedDownloads, downloadPath, startSimulation, clearHistory, cancelDownload } = useDownloads();
     const { showToast } = useToast();
 
     const [filter, setFilter] = useState('All'); // 'All', 'Active', 'Completed'
@@ -119,7 +119,9 @@ export default function DownloadsScreen() {
                                                         <View style={styles.progressBarBg}>
                                                             <View style={[styles.progressBarFill, { width: `${item.progress}%` }]} />
                                                         </View>
-                                                        <MaterialIcons name="pause" size={20} color={theme.iconInactive} />
+                                                        <TouchableOpacity onPress={() => cancelDownload(video.id)} style={{ cursor: 'pointer' }} activeOpacity={0.7} accessibilityLabel="Cancel download">
+                                                            <MaterialIcons name="close" size={24} color={theme.danger} />
+                                                        </TouchableOpacity>
                                                     </View>
                                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                                                         <Text style={styles.cardSubText}>~{item.timeLeft}s {t('left')}</Text>

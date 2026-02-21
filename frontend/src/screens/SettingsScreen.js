@@ -1,15 +1,18 @@
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, StyleSheet, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, StyleSheet, TextInput, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
 import { useTheme } from '../context/ThemeContext';
 import { useDownloads } from '../context/DownloadContext';
 import { useToast } from '../context/ToastContext';
+import { useSearchHistory } from '../context/SearchContext';
 
 export default function SettingsScreen() {
     const { theme, themePref, setAppTheme, language, setAppLanguage, setFontSize, t } = useTheme();
     const { downloadPath, updateDownloadPath, clearHistory } = useDownloads();
     const { showToast } = useToast();
+    const { clearRecentSearches } = useSearchHistory();
     const styles = useMemo(() => createStyles(theme), [theme]);
 
     const [pathModalVisible, setPathModalVisible] = React.useState(false);
@@ -19,16 +22,27 @@ export default function SettingsScreen() {
         if (Platform.OS === 'web' && window.showDirectoryPicker) {
             try {
                 const dirHandle = await window.showDirectoryPicker();
-                // Browsers do NOT provide the absolute path for security reasons, just the name.
-                // Thus, showDirectoryPicker is limited. However, we can ask the user to type if needed.
-                // We'll set the path to what they picked (e.g. "Downloads") just as a UI hint, 
-                // but since yt-dlp needs an absolute path, we'll open the modal still so they can type it.
-                // Or better, we populate the modal with the chosen directory name.
                 showToast(`Selected directory: ${dirHandle.name}. Please ensure this is an absolute path.`, 'info');
                 setTempPath(`C:\\Users\\Name\\${dirHandle.name}`);
                 setPathModalVisible(true);
             } catch (err) {
                 console.log('Directory picker cancelled or failed', err);
+                setTempPath(downloadPath);
+                setPathModalVisible(true);
+            }
+        } else if (Platform.OS === 'android') {
+            try {
+                const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+                if (permissions.granted) {
+                    const uri = permissions.directoryUri;
+                    setTempPath(uri);
+                    setPathModalVisible(true);
+                } else {
+                    setTempPath(downloadPath);
+                    setPathModalVisible(true);
+                }
+            } catch (err) {
+                console.error("Failed to pick directory", err);
                 setTempPath(downloadPath);
                 setPathModalVisible(true);
             }
@@ -157,7 +171,7 @@ export default function SettingsScreen() {
                     <Text style={styles.sectionTitle}>{t('dataManagement')}</Text>
                     <View style={styles.card}>
                         <TouchableOpacity style={[styles.row, { cursor: 'pointer' }]} onPress={async () => {
-                            await AsyncStorage.removeItem('@recent_searches');
+                            clearRecentSearches();
                             clearHistory();
                             showToast(t('historyCleared'), 'success');
                         }}>

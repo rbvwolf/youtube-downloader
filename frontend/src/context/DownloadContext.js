@@ -45,6 +45,19 @@ export const DownloadProvider = ({ children }) => {
         } catch (e) { }
     };
 
+    const cancelDownload = async (videoId) => {
+        try {
+            await api.cancelDownload(videoId);
+            setActiveDownloads(prev => {
+                const updated = { ...prev };
+                delete updated[videoId];
+                return updated;
+            });
+        } catch (e) {
+            console.error("Failed to cancel download", e);
+        }
+    };
+
     const clearHistory = async () => {
         setCompletedDownloads([]);
         try {
@@ -97,7 +110,7 @@ export const DownloadProvider = ({ children }) => {
     };
 
     return (
-        <DownloadContext.Provider value={{ activeDownloads, completedDownloads, downloadPath, updateDownloadPath, clearHistory, startSimulation }}>
+        <DownloadContext.Provider value={{ activeDownloads, completedDownloads, downloadPath, updateDownloadPath, clearHistory, startSimulation, cancelDownload }}>
             {children}
         </DownloadContext.Provider>
     );

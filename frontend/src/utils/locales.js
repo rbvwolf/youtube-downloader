@@ -65,7 +65,7 @@ export const translations = {
         micDenied: "Microphone access denied. Please allow it in settings.",
         fileNotFound: "File not found or deleted from computer.",
         enterPath: "Enter absolute path (e.g., C:\\Downloads)",
-        historyCleared: "History cleared successfully."
+        historyCleared: "Search and download history cleared successfully."
     },
     tr: {
         // Tabs
@@ -133,6 +133,6 @@ export const translations = {
         micDenied: "Mikrofon izni reddedildi. Lütfen ayarlardan izin verin.",
         fileNotFound: "Dosya bilgisayarda bulunamadı veya silinmiş.",
         enterPath: "Tam yolu girin (Örn: C:\\Indirilenler)",
-        historyCleared: "Geçmiş başarıyla temizlendi."
+        historyCleared: "Arama ve indirme geçmişi başarıyla temizlendi."
     }
 };

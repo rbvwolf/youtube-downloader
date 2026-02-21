@@ -20,6 +20,7 @@
     "@react-navigation/native-stack": "^6.9.26",
     "axios": "^1.6.8",
     "expo": "~51.0.39",
+    "expo-file-system": "~17.0.1",
     "expo-modules-core": "~1.12.26",
     "expo-status-bar": "~1.12.1",
     "nativewind": "^2.0.11",

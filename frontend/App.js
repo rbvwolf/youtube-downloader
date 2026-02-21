@@ -15,6 +15,7 @@ import SettingsScreen from './src/screens/SettingsScreen';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { ToastProvider } from './src/context/ToastContext';
 import { DownloadProvider } from './src/context/DownloadContext';
+import { SearchProvider } from './src/context/SearchContext';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -87,7 +88,9 @@ export default function App() {
         <ThemeProvider>
             <DownloadProvider>
                 <ToastProvider>
-                    <MainApp />
+                    <SearchProvider>
+                        <MainApp />
+                    </SearchProvider>
                 </ToastProvider>
             </DownloadProvider>
         </ThemeProvider>

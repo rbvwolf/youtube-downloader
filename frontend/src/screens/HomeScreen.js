@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ImageBackground, StatusBar, SafeAreaView, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import api from '../services/Api';
 import { formatViews } from '../utils/formatters';
 import { useDownloads } from '../context/DownloadContext';
+import { useSearchHistory } from '../context/SearchContext';
 import VideoCard from '../components/VideoCard';
 import VoiceSearchOverlay from '../components/VoiceSearchOverlay';
 import QualitySelectionModal from '../components/QualitySelectionModal';
@@ -19,10 +19,10 @@ export default function HomeScreen({ navigation }) {
     const { theme, t } = useTheme();
     const { showToast } = useToast();
     const { startSimulation } = useDownloads();
+    const { recentSearches, saveRecentSearch, clearRecentSearches, loadRecentSearches } = useSearchHistory();
     const styles = useMemo(() => createStyles(theme), [theme]);
 
     const [searchQuery, setSearchQuery] = useState('');
-    const [recentSearches, setRecentSearches] = useState([]);
     const [suggestions, setSuggestions] = useState([]);
     const [isListening, setIsListening] = useState(false);
 
@@ -84,34 +84,6 @@ export default function HomeScreen({ navigation }) {
         return () => clearTimeout(timeoutId);
     }, [searchQuery, recentSearches, t]);
 
-    const loadRecentSearches = async () => {
-        try {
-            const saved = await AsyncStorage.getItem(RECENT_SEARCHES_KEY);
-            if (saved !== null) {
-                setRecentSearches(JSON.parse(saved));
-            }
-        } catch (e) {
-            console.error('Failed to load recent searches', e);
-        }
-    };
-
-    const saveRecentSearch = async (query) => {
-        if (!query.trim()) return;
-        try {
-            const lowerQuery = query.toLowerCase().trim();
-            const translatedChips = [t('music').toLowerCase(), t('podcasts').toLowerCase(), t('news').toLowerCase()];
-            if (translatedChips.includes(lowerQuery) || DEFAULT_CHIPS.map(c => c.toLowerCase()).includes(lowerQuery)) return; // Don't save default chips to history
-
-            const filtered = recentSearches.filter(q => q.toLowerCase().trim() !== lowerQuery);
-            const updated = [query.trim(), ...filtered].slice(0, 10);
-
-            setRecentSearches(updated);
-            await AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
-        } catch (e) {
-            console.error('Failed to save recent search', e);
-        }
-    };
-
     const handleSearch = (queryToSearch) => {
         const query = (queryToSearch || searchQuery).trim();
         if (!query) return;
@@ -120,15 +92,6 @@ export default function HomeScreen({ navigation }) {
         setSearchQuery('');
         setSuggestions([]);
         navigation.navigate('SearchResults', { query });
-    };
-
-    const clearRecentSearches = async () => {
-        try {
-            await AsyncStorage.removeItem(RECENT_SEARCHES_KEY);
-            setRecentSearches([]);
-        } catch (e) {
-            console.error('Failed to clear recent searches', e);
-        }
     };
 
     const fetchTrending = async () => {

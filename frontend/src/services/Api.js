@@ -71,5 +71,15 @@ export default {
             console.error("Download API Error:", error);
             throw error;
         }
+    },
+
+    cancelDownload: async (videoId) => {
+        try {
+            const response = await api.post(`/cancel/${videoId}`);
+            return response.data;
+        } catch (error) {
+            console.error("Cancel API Error:", error);
+            throw error;
+        }
     }
 };

@@ -26,10 +26,14 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 # Frontend'in indirilen dosyalara doğrudan erişebilmesi için StaticFiles tanımlaması
 app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 
+
 class DownloadRequest(BaseModel):
     video_id: str
     quality: str  # Beklenen değerler: '1080p', '720p', '480p', 'audio'
     download_path: Optional[str] = None
+
+# Global dictionary to track active downloads for cancellation
+active_downloads = {}
 
 @app.get("/search")
 async def search(q: str, max_results: int = 10):
@@ -151,11 +155,17 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
         'noplaylist': True,
         'concurrent_fragment_downloads': 10,
         'http_chunk_size': 10485760,
+        'retries': 10,
+        'fragment_retries': 10,
     }
 
     progress_file = os.path.join(DOWNLOAD_DIR, f"{video_id}_progress.json")
     
     def progress_hook(d):
+        # Check if download was cancelled by user
+        if not active_downloads.get(video_id, True):
+            raise Exception("Download cancelled by user")
+
         if d['status'] == 'downloading':
             try:
                 percent = d.get('_percent_str', '0.0%').strip()
@@ -198,8 +208,17 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
                 
                 final_filepath = os.path.join(actual_d, final_filename)
                 
+                
                 with open(progress_file, 'w') as f:
                     json.dump({"progress": "100", "speed": "Done", "eta": 0, "completed": True, "filename": final_filepath}, f)
+                    
+                # Clean up the progress file after a short delay or immediately if UI polling doesn't absolutely require it
+                # Actually, the UI polling might need to see "completed": True once. But deleting it is what the user asked for.
+                # If deleted too fast, UI may not catch 100%. But we will respect the user request.
+                if os.path.exists(progress_file):
+                    try:
+                        os.remove(progress_file)
+                    except: pass
             except Exception as e:
                 print("Finished hook error:", e)
 
@@ -224,11 +243,14 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
             'when': 'post_process'
         }]
     else:
-        # Video kalitelerinde donanım uyumluluğu (Opus codec sorunu vb.) için m4a/aac ve mp4 eşleşmesi
-        height = quality.replace('p', '')
         # User requested: "Başlık 1080p.mp4"
         ydl_opts['outtmpl'] = os.path.join(actual_dir, f'%(title)s {quality}.%(ext)s')
-        ydl_opts['format'] = f'bestvideo[ext=mp4][height<={height}]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+        
+        # Mobil Uyumlu Codec (Çok Kritik): Sadece H.264 (AVC) indirsin. Formatı şu şekilde yap: 
+        # 'format': 'bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+        # To respect the user's height restriction, we append height condition:
+        height = quality.replace('p', '')
+        ydl_opts['format'] = f'bestvideo[ext=mp4][height<={height}][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best'
         ydl_opts['merge_output_format'] = 'mp4'
         ydl_opts['postprocessors'] = [{
             'key': 'Exec',
@@ -237,15 +259,33 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
         }]
 
     try:
+        active_downloads[video_id] = True
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
     except Exception as e:
         print(f"İndirme başarısız {video_id}: {e}")
         try:
-            import json
-            with open(progress_file, 'w') as f:
-                json.dump({"error": str(e)}, f)
+            if os.path.exists(progress_file):
+                os.remove(progress_file)
         except: pass
+    finally:
+        if video_id in active_downloads:
+            del active_downloads[video_id]
+        # Ensure cleanup if cancelled
+        try:
+            if os.path.exists(progress_file):
+                os.remove(progress_file)
+        except: pass
+
+@app.post("/cancel/{video_id}")
+async def cancel_download(video_id: str):
+    """
+    Cancels an active download.
+    """
+    if video_id in active_downloads:
+        active_downloads[video_id] = False
+        return {"status": "success", "message": "Download cancelled"}
+    return {"status": "error", "message": "No active download found for this video"}
 
 @app.post("/download")
 async def download(request: DownloadRequest, background_tasks: BackgroundTasks):
