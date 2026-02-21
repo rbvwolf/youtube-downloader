@@ -1,8 +1,10 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import yt_dlp
 import os
+import re
 
 app = FastAPI(title="Youtube-Downloader API")
 
@@ -18,6 +20,9 @@ app.add_middleware(
 # İstek doğrultusunda videoların kaydedileceği dizin
 DOWNLOAD_DIR = r"R:\Code\Youtube-Downloader-Downloads"
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+# Frontend'in indirilen dosyalara doğrudan erişebilmesi için StaticFiles tanımlaması
+app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
 
 class DownloadRequest(BaseModel):
     video_id: str
@@ -118,30 +123,94 @@ def download_video_sync(video_id: str, quality: str):
     url = f"https://www.youtube.com/watch?v={video_id}"
     
     ydl_opts: dict = {
-        'outtmpl': os.path.join(DOWNLOAD_DIR, '%(title)s [%(id)s].%(ext)s'),
         'quiet': False,
         'noplaylist': True,
+        'concurrent_fragment_downloads': 10,
+        'http_chunk_size': 10485760,
     }
+
+    progress_file = os.path.join(DOWNLOAD_DIR, f"{video_id}_progress.json")
+    
+    def progress_hook(d):
+        if d['status'] == 'downloading':
+            try:
+                percent = d.get('_percent_str', '0.0%').strip()
+                # Clean up ansi escape sequences from yt-dlp strings
+                import re
+                percent = re.sub(r'\x1b[^m]*m', '', percent)
+
+                speed_bytes = d.get('speed')
+                if speed_bytes:
+                    speed_mb = speed_bytes / 1024 / 1024
+                    speed_str = f"{speed_mb:.1f} MB/s"
+                else:
+                    speed_str = "0.0 MB/s"
+
+                eta = d.get('eta', 0)
+
+                import json
+                with open(progress_file, 'w') as f:
+                    json.dump({"progress": percent.replace('%', ''), "speed": speed_str, "eta": eta}, f)
+            except Exception as e:
+                pass
+        elif d['status'] == 'finished':
+            try:
+                import json
+                final_filename = os.path.basename(d.get('filename', ''))
+                # Mirror the replacements done by the Exec post-processor
+                final_filename = final_filename.replace('.mpg.mp3', '.mp3').replace('.mp4.mp3', '.mp3')
+                import re
+                final_filename = re.sub(r'\.mpg (\d+p)\.mp4', r' \1.mp4', final_filename)
+                final_filename = re.sub(r'\.mp4 (\d+p)\.mp4', r' \1.mp4', final_filename)
+                
+                with open(progress_file, 'w') as f:
+                    json.dump({"progress": "100", "speed": "Done", "eta": 0, "completed": True, "filename": final_filename}, f)
+            except:
+                pass
+
+    ydl_opts['progress_hooks'] = [progress_hook]
+
+    # Use outtmpl with a python function or a specific replacement to strip .mpg if it exists in the title
+    # yt-dlp 2023+ allows python dicts. We will just use the standard template, but clean up the title using the 'replace' or 'autonumber' no, just use a custom outtmpl class or postprocessor.
+    # Actually, the easiest way is to let yt-dlp download, but since we define outtmpl:
     
     if quality == 'audio':
         # Sadece ses modunda mp3'e çevirme işlemi (FFmpeg kullanır)
+        ydl_opts['outtmpl'] = os.path.join(DOWNLOAD_DIR, '%(title)s.%(ext)s')
         ydl_opts['format'] = 'bestaudio/best'
         ydl_opts['postprocessors'] = [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
             'preferredquality': '192',
+        }, {
+            # Strip .mpg and other unwanted extensions from the final filename
+            'key': 'Exec',
+            'exec_cmd': 'python -c "import os, sys; p = sys.argv[1]; d, f = os.path.split(p); f_new = f.replace(\'.mpg.mp3\', \'.mp3\').replace(\'.mp4.mp3\', \'.mp3\'); os.rename(p, os.path.join(d, f_new)) if f != f_new else None"',
+            'when': 'post_process'
         }]
     else:
-        # Video kalitelerinde, istenen yüksekliğe (.e.g 1080) eş veya daha düşük olan best_video + best_audio. (FFmpeg birleştirir)
+        # Video kalitelerinde donanım uyumluluğu (Opus codec sorunu vb.) için m4a/aac ve mp4 eşleşmesi
         height = quality.replace('p', '')
-        ydl_opts['format'] = f'bestvideo[height<={height}]+bestaudio/best'
+        # User requested: "Başlık 1080p.mp4"
+        ydl_opts['outtmpl'] = os.path.join(DOWNLOAD_DIR, f'%(title)s {quality}.%(ext)s')
+        ydl_opts['format'] = f'bestvideo[ext=mp4][height<={height}]+bestaudio[ext=m4a]/best[ext=mp4]/best'
         ydl_opts['merge_output_format'] = 'mp4'
+        ydl_opts['postprocessors'] = [{
+            'key': 'Exec',
+            'exec_cmd': f'python -c "import os, sys; p = sys.argv[1]; d, f = os.path.split(p); f_new = f.replace(\'.mpg {quality}.mp4\', \' {quality}.mp4\').replace(\'.mp4 {quality}.mp4\', \' {quality}.mp4\'); os.rename(p, os.path.join(d, f_new)) if f != f_new else None"',
+            'when': 'post_process'
+        }]
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
     except Exception as e:
         print(f"İndirme başarısız {video_id}: {e}")
+        try:
+            import json
+            with open(progress_file, 'w') as f:
+                json.dump({"error": str(e)}, f)
+        except: pass
 
 @app.post("/download")
 async def download(request: DownloadRequest, background_tasks: BackgroundTasks):
@@ -155,3 +224,56 @@ async def download(request: DownloadRequest, background_tasks: BackgroundTasks):
         "video_id": request.video_id,
         "download_directory": DOWNLOAD_DIR
     }
+
+@app.get("/video-info")
+async def get_video_info(video_id: str):
+    """
+    İndirme yapmadan sadece video bilgilerini çeken endpoint.
+    Mevcut formatların çözünürlüklerini ve filesize listesini MB döner.
+    """
+    url = f"https://www.youtube.com/watch?v={video_id}"
+    ydl_opts = {'quiet': True}
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            formats = info.get('formats', [])
+            
+            result_formats = []
+            for f in formats:
+                size_bytes = f.get('filesize') or f.get('filesize_approx') or 0
+                size_mb = round(size_bytes / (1024 * 1024), 2) if size_bytes else 0
+                
+                resolution = f.get('resolution') or f.get('format_note') or f"{f.get('width', '')}x{f.get('height', '')}"
+                
+                result_formats.append({
+                    "format_id": f.get('format_id'),
+                    "ext": f.get('ext'),
+                    "resolution": resolution,
+                    "filesize_mb": size_mb,
+                    "vcodec": f.get('vcodec'),
+                    "acodec": f.get('acodec')
+                })
+                
+            return {
+                "id": info.get("id"),
+                "title": info.get("title"),
+                "formats": result_formats
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/progress/{video_id}")
+async def get_progress(video_id: str):
+    """
+    Returns the real-time download progress from the JSON file created by yt-dlp hooks.
+    """
+    import json
+    progress_file = os.path.join(DOWNLOAD_DIR, f"{video_id}_progress.json")
+    if os.path.exists(progress_file):
+        try:
+            with open(progress_file, 'r') as f:
+                data = json.load(f)
+                return data
+        except:
+             return {"progress": 0, "speed": "0.0 MB/s", "eta": 0}
+    return {"progress": 0, "speed": "0.0 MB/s", "eta": 0}

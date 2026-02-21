@@ -1,18 +1,34 @@
-import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, ImageBackground, StyleSheet } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, ImageBackground, StyleSheet, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { useDownloads } from '../context/DownloadContext';
+import LocalPlayerModal from '../components/LocalPlayerModal';
 
 export default function DownloadsScreen() {
-    const { theme } = useTheme();
+    const { theme, t } = useTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
+    const { activeDownloads, completedDownloads, downloadVideo } = useDownloads();
+
+    const [filter, setFilter] = useState('All'); // 'All', 'Active', 'Completed'
+
+    // Preview modal states
+    const [previewItem, setPreviewItem] = useState(null);
+
+    const activeList = Object.values(activeDownloads).map(d => ({ ...d, isActive: true }));
+    const completedList = completedDownloads.map(d => ({ ...d, isActive: false }));
+
+    let displayedList = [];
+    if (filter === 'All') displayedList = [...activeList, ...completedList];
+    else if (filter === 'Active') displayedList = activeList;
+    else if (filter === 'Completed') displayedList = completedList;
 
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.contentContainer}>
                 <View style={styles.header}>
                     <View style={styles.rowBetween}>
-                        <Text style={styles.headerTitle}>Downloads</Text>
+                        <Text style={styles.headerTitle}>{t('downloadsTitle')}</Text>
                         <TouchableOpacity style={[styles.iconBtn, { cursor: 'pointer' }]}>
                             <MaterialIcons name="more-vert" size={24} color={theme.text} />
                         </TouchableOpacity>
@@ -20,101 +36,115 @@ export default function DownloadsScreen() {
 
                     <View style={{ height: 40, marginTop: 16 }}>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 16 }}>
-                            <TouchableOpacity style={[styles.filterBtn, { backgroundColor: theme.text, cursor: 'pointer' }]}>
-                                <Text style={[styles.filterBtnText, { color: theme.background }]}>All</Text>
+                            <TouchableOpacity style={[styles.filterBtn, filter === 'All' && { backgroundColor: theme.text }, { cursor: 'pointer' }]} onPress={() => setFilter('All')}>
+                                <Text style={[styles.filterBtnText, filter === 'All' && { color: theme.background }]}>{t('all')}</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={[styles.filterBtn, { cursor: 'pointer' }]}>
-                                <Text style={styles.filterBtnText}>Active</Text>
+                            <TouchableOpacity style={[styles.filterBtn, filter === 'Active' && { backgroundColor: theme.text }, { cursor: 'pointer' }]} onPress={() => setFilter('Active')}>
+                                <Text style={[styles.filterBtnText, filter === 'Active' && { color: theme.background }]}>{t('active')}</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={[styles.filterBtn, { cursor: 'pointer' }]}>
-                                <Text style={styles.filterBtnText}>Completed</Text>
+                            <TouchableOpacity style={[styles.filterBtn, filter === 'Completed' && { backgroundColor: theme.text }, { cursor: 'pointer' }]} onPress={() => setFilter('Completed')}>
+                                <Text style={[styles.filterBtnText, filter === 'Completed' && { color: theme.background }]}>{t('completed')}</Text>
                             </TouchableOpacity>
                         </ScrollView>
                     </View>
                 </View>
 
                 <ScrollView style={styles.listContainer} showsVerticalScrollIndicator={false}>
-                    {/* Active Item */}
-                    <TouchableOpacity style={[styles.card, { cursor: 'pointer' }]} activeOpacity={0.9}>
-                        <View style={{ flexDirection: 'row' }}>
-                            <View style={styles.thumbnailCont}>
-                                <ImageBackground
-                                    source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCP8e1aW8zg5OhX7ifWp0NcAUHGY8Rm5k8HkQzJdYYHxG2Lr6VIFsZqdwfauXPgyRZve4bVxUb79JSKVRu5z7wjfa1hF6mZwFR0zbeaJ6CxUnxFDjOwFMdNfBy3_PhzzNC6oQA8Xo_-0EBX_cJMpgvEwiUTzqFhCce-JezWy-FE5ac_Yf9NGldKRvYZCDLeLP4IsyGA4qdbr5tHo5MlLIqZogg54U80pEmO2X9Wnx2EAkAJ3jqQR2Lc1Jk9LUbLWdFFKqdk4DI6-tNn' }}
-                                    style={[styles.fullImage, { opacity: 0.8 }]}
-                                />
-                                <View style={[styles.overlayCenter, { backgroundColor: 'rgba(0,0,0,0.3)' }]}>
-                                    <MaterialIcons name="downloading" size={28} color="white" />
-                                </View>
-                            </View>
-                            <View style={styles.cardInfo}>
-                                <View>
-                                    <Text style={styles.cardTitle} numberOfLines={2}>lofi hip hop radio - beats to relax/study to</Text>
-                                    <Text style={styles.cardSubText}>12 MB / 45 MB • 1.2 MB/s</Text>
-                                </View>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-                                    <View style={styles.progressBarBg}>
-                                        <View style={styles.progressBarFill} />
-                                    </View>
-                                    <MaterialIcons name="pause" size={20} color={theme.iconInactive} />
-                                </View>
-                            </View>
+                    {displayedList.length === 0 ? (
+                        <View style={{ alignItems: 'center', marginTop: 40 }}>
+                            <MaterialIcons name="cloud-off" size={64} color={theme.iconInactive} />
+                            <Text style={{ marginTop: 16, color: theme.subText, fontSize: 16 }}>{t('noDownloadsFound')}</Text>
                         </View>
-                    </TouchableOpacity>
+                    ) : (
+                        displayedList.map((item, idx) => {
+                            const isAudio = item.quality === 'audio' || item.quality?.includes('mp3');
+                            const video = item.video || item;
 
-                    {/* Completed Video Item */}
-                    <TouchableOpacity style={[styles.card, { cursor: 'pointer' }]} activeOpacity={0.9}>
-                        <View style={{ flexDirection: 'row' }}>
-                            <View style={styles.thumbnailCont}>
-                                <ImageBackground
-                                    source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBD6TsukLg_B4KuxkTWkPTdL-YHo-KTjfJz_tfxPH7zikgtv0wyHr9rrp9WyvpIWqxxH1Uc1kUqlemwskTGfaM5xcB2Ef6REB4bkrBSJfYvdrp0d794F0ueUSEI8zU9_6NFtEoP5ipGQsc5lPdPQqIggbJtoBPRU7DcoGN8f6Ksh-7EeEpQ9mZnF7L5IOkqlu4h8X5Unv8jWt9333Kk9trtRK503iF_KdK6Byj6Eh1HLvudbWNJlR-HPTNjjAIIRb1lfRnklBIi-4ee' }}
-                                    style={styles.fullImage}
-                                />
-                                <View style={styles.durationBadge}>
-                                    <Text style={styles.durationText}>12:45</Text>
-                                </View>
-                            </View>
-                            <View style={styles.cardInfo}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <Text style={[styles.cardTitle, { flex: 1, marginRight: 8 }]} numberOfLines={2}>MKBHD - iPhone 15 Review: The Truth</Text>
-                                    <MaterialIcons name="more-vert" size={20} color={theme.iconInactive} />
-                                </View>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-                                    <View style={styles.qualityTag}>
-                                        <Text style={styles.qualityTagText}>1080p</Text>
+                            return (
+                                <TouchableOpacity key={idx} style={[styles.card, { cursor: 'pointer' }]} activeOpacity={0.9}>
+                                    <View style={{ flexDirection: 'row' }}>
+                                        {/* Thumbnail */}
+                                        {isAudio ? (
+                                            <TouchableOpacity style={[styles.thumbnailCont, { backgroundColor: theme.primaryBg, alignItems: 'center', justifyContent: 'center' }]} activeOpacity={0.8} onPress={() => !item.isActive && setPreviewItem(item)}>
+                                                <MaterialIcons name="headphones" size={32} color={theme.primary} />
+                                                <View style={styles.durationBadge}>
+                                                    <Text style={styles.durationText}>{video.duration || 'Ses'}</Text>
+                                                </View>
+                                            </TouchableOpacity>
+                                        ) : (
+                                            <TouchableOpacity
+                                                style={styles.thumbnailCont}
+                                                activeOpacity={0.8}
+                                                onPress={() => !item.isActive && setPreviewItem(item)}
+                                            >
+                                                <ImageBackground
+                                                    source={{ uri: video.thumbnail }}
+                                                    style={[styles.fullImage, item.isActive && { opacity: 0.8 }]}
+                                                />
+                                                <View style={styles.playOverlay}>
+                                                    <MaterialIcons name="play-arrow" size={32} color="white" />
+                                                </View>
+                                                {item.isActive ? (
+                                                    <View style={[styles.overlayCenter, { backgroundColor: 'rgba(0,0,0,0.3)' }]}>
+                                                        <MaterialIcons name="downloading" size={28} color="white" />
+                                                    </View>
+                                                ) : (
+                                                    <View style={styles.durationBadge}>
+                                                        <Text style={styles.durationText}>{video.duration}</Text>
+                                                    </View>
+                                                )}
+                                            </TouchableOpacity>
+                                        )}
+
+                                        {/* Info */}
+                                        <View style={styles.cardInfo}>
+                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                <Text style={[styles.cardTitle, { flex: 1, marginRight: 8 }]} numberOfLines={2}>{video.title}</Text>
+                                                <MaterialIcons name="more-vert" size={20} color={theme.iconInactive} />
+                                            </View>
+
+                                            {item.isActive ? (
+                                                <View style={{ marginTop: 4 }}>
+                                                    <Text style={styles.cardSubText}>{t('downloading')} {item.progress}%</Text>
+                                                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: 8 }}>
+                                                        <View style={styles.progressBarBg}>
+                                                            <View style={[styles.progressBarFill, { width: `${item.progress}%` }]} />
+                                                        </View>
+                                                        <MaterialIcons name="pause" size={20} color={theme.iconInactive} />
+                                                    </View>
+                                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                                        <Text style={styles.cardSubText}>~{item.timeLeft}s {t('left')}</Text>
+                                                        <Text style={[styles.cardSubText, { fontWeight: '600' }]} importantForAccessibility="no">{item.speed}</Text>
+                                                    </View>
+                                                </View>
+                                            ) : (
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
+                                                    <View style={[styles.qualityTag, isAudio ? { backgroundColor: theme.primaryBg } : { backgroundColor: 'rgba(33, 150, 243, 0.15)' }]}>
+                                                        <Text style={[styles.qualityTagText, isAudio ? { color: theme.primary } : { color: '#2196F3' }]}>
+                                                            {isAudio ? 'Ses' : item.quality}
+                                                        </Text>
+                                                    </View>
+                                                    <Text style={styles.cardSubText}>{item.downloadedAt ? new Date(item.downloadedAt).toLocaleDateString() : t('completed')}</Text>
+                                                </View>
+                                            )}
+                                        </View>
                                     </View>
-                                    <Text style={styles.cardSubText}>Oct 24 • 245 MB</Text>
-                                </View>
-                            </View>
-                        </View>
-                    </TouchableOpacity>
-
-                    {/* Completed Audio Item */}
-                    <TouchableOpacity style={[styles.card, { cursor: 'pointer' }]} activeOpacity={0.9}>
-                        <View style={{ flexDirection: 'row' }}>
-                            <View style={[styles.thumbnailCont, { backgroundColor: theme.primaryBg, alignItems: 'center', justifyContent: 'center' }]}>
-                                <MaterialIcons name="headphones" size={32} color={theme.primary} />
-                                <View style={styles.durationBadge}>
-                                    <Text style={styles.durationText}>45:12</Text>
-                                </View>
-                            </View>
-                            <View style={styles.cardInfo}>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                    <Text style={[styles.cardTitle, { flex: 1, marginRight: 8 }]} numberOfLines={2}>TED Talk: The Future of AI in Design</Text>
-                                    <MaterialIcons name="more-vert" size={20} color={theme.iconInactive} />
-                                </View>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-                                    <View style={[styles.qualityTag, { backgroundColor: theme.primaryBg }]}>
-                                        <Text style={[styles.qualityTagText, { color: theme.primary }]}>Audio</Text>
-                                    </View>
-                                    <Text style={styles.cardSubText}>Oct 20 • 32 MB</Text>
-                                </View>
-                            </View>
-                        </View>
-                    </TouchableOpacity>
-
-                    <View style={{ height: 80 }} />
+                                </TouchableOpacity>
+                            );
+                        })
+                    )}
                 </ScrollView>
             </View>
+
+            {/* Video Player Overlay */}
+            <LocalPlayerModal
+                visible={!!previewItem}
+                item={previewItem}
+                theme={theme}
+                t={t}
+                onClose={() => setPreviewItem(null)}
+            />
+
         </SafeAreaView>
     );
 }
@@ -132,6 +162,7 @@ const createStyles = (theme) => StyleSheet.create({
     card: { backgroundColor: theme.card, borderRadius: 24, padding: 12, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: theme.isDark ? 0.2 : 0.05, shadowRadius: 8, elevation: 2, borderWidth: 1, borderColor: theme.border },
     thumbnailCont: { width: 120, height: 76, borderRadius: 12, backgroundColor: theme.chipInactiveBg, overflow: 'hidden' }, // Using chipInactiveBg for placeholder background
     fullImage: { width: '100%', height: '100%' },
+    playOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.3)', alignItems: 'center', justifyContent: 'center' },
     overlayCenter: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
     durationBadge: { position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 },
     durationText: { color: 'white', fontSize: 10, fontWeight: '500' },

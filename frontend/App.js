@@ -29,7 +29,7 @@ function HomeStack() {
 }
 
 function MainApp() {
-    const { theme, isDarkMode } = useTheme();
+    const { theme, isDarkMode, t } = useTheme();
     return (
         <ErrorBoundary>
             <View style={{ flex: 1, backgroundColor: theme.background, minHeight: Platform.OS === 'web' ? '100vh' : '100%' }}>
@@ -56,6 +56,7 @@ function MainApp() {
 
                                 return <MaterialIcons name={iconName} size={size} color={color} />;
                             },
+                            tabBarLabel: t(route.name.toLowerCase()),
                             tabBarActiveTintColor: theme.primary,
                             tabBarInactiveTintColor: theme.iconInactive,
                             tabBarStyle: {

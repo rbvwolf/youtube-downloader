@@ -11,6 +11,11 @@ export const translations = {
         clearHistory: "Clear History",
         trendingVideos: "Trending Videos",
         searching: "Searching...",
+        downloading: "Downloading...",
+        downloaded: "Downloaded",
+        music: "Music",
+        podcasts: "Podcasts",
+        news: "News",
 
         // Settings
         downloadLocation: "Download Location",
@@ -38,6 +43,14 @@ export const translations = {
         dataSaver: "Data saver",
         standard: "Standard",
 
+        // Downloads Screen
+        downloadsTitle: "Downloads",
+        all: "All",
+        active: "Active",
+        completed: "Completed",
+        noDownloadsFound: "No downloads found.",
+        left: "left",
+
         // Shared
         views: "views",
         live: "LIVE",
@@ -62,6 +75,11 @@ export const translations = {
         clearHistory: "Geçmişi Temizle",
         trendingVideos: "Trend Videolar",
         searching: "Aranıyor...",
+        downloading: "İndiriliyor...",
+        downloaded: "İndirildi",
+        music: "Müzik",
+        podcasts: "Podcastler",
+        news: "Haberler",
 
         // Settings
         downloadLocation: "İndirme Konumu",
@@ -88,6 +106,14 @@ export const translations = {
         goodForPhones: "Telefon için iyi",
         dataSaver: "Veri tasarrufu",
         standard: "Standart",
+
+        // Downloads Screen
+        downloadsTitle: "İndirilenler",
+        all: "Tümü",
+        active: "Aktif",
+        completed: "Tamamlananlar",
+        noDownloadsFound: "İndirme bulunamadı.",
+        left: "kaldı",
 
         // Shared
         views: "görüntülenme",

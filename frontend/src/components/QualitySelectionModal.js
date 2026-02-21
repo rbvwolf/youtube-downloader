@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Modal, ActivityIndicator, ImageBackground, StyleSheet, SafeAreaView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import api from '../services/Api';
 
 export default function QualitySelectionModal({
     visible,
@@ -15,6 +16,48 @@ export default function QualitySelectionModal({
     const { t } = useTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
     const [selectedQuality, setSelectedQuality] = useState(null);
+    const [realSizes, setRealSizes] = useState({});
+    const [fetchingSizes, setFetchingSizes] = useState(false);
+
+    useEffect(() => {
+        let active = true;
+        if (visible && video?.id) {
+            setFetchingSizes(true);
+            api.getVideoSizes(video.id)
+                .then(data => {
+                    if (!active) return;
+                    const sizes = {};
+                    let audioSizeMb = 0;
+
+                    if (data && data.formats) {
+                        data.formats.forEach(f => {
+                            if (f.vcodec === 'none' && f.acodec !== 'none') {
+                                if (f.filesize_mb > audioSizeMb) audioSizeMb = f.filesize_mb;
+                            }
+                        });
+                        sizes['audio'] = audioSizeMb > 0 ? `${audioSizeMb.toFixed(1)} MB` : '-- MB';
+
+                        const getVidSize = (height) => {
+                            let maxVid = 0;
+                            data.formats.forEach(f => {
+                                if (f.vcodec !== 'none' && f.resolution && f.resolution.includes(height.toString())) {
+                                    if (f.filesize_mb > maxVid) maxVid = f.filesize_mb;
+                                }
+                            });
+                            return maxVid > 0 ? `${(maxVid + audioSizeMb).toFixed(1)} MB` : '-- MB';
+                        };
+
+                        sizes['1080p'] = getVidSize(1080);
+                        sizes['720p'] = getVidSize(720);
+                        sizes['480p'] = getVidSize(480);
+                    }
+                    setRealSizes(sizes);
+                })
+                .catch(err => console.error("Sizes Error", err))
+                .finally(() => { if (active) setFetchingSizes(false); });
+        }
+        return () => { active = false; };
+    }, [visible, video]);
 
     // Filter out formats if needed, or map them to the UI
     // Assuming backend returns: [{ quality: "1080p", label: "Full HD (1080p)" }, ...]
@@ -27,14 +70,15 @@ export default function QualitySelectionModal({
     };
 
     const getFormatUI = (format) => {
+        const sizeVal = realSizes[format.quality] || format.size || '-- MB';
         const str = format.quality.toLowerCase();
         if (str.includes('audio') || str.includes('mp3')) {
-            return { icon: 'headphones', badge: 'MP3', desc: t('audioOnly'), size: format.size || '-- MB' };
+            return { icon: 'headphones', badge: 'MP3', desc: t('audioOnly'), size: sizeVal };
         }
-        if (str.includes('1080')) return { icon: 'hd', badge: 'Full HD', desc: t('bestQuality'), size: format.size || '-- MB' };
-        if (str.includes('720')) return { icon: 'hd', badge: 'HD', desc: t('goodForPhones'), size: format.size || '-- MB' };
-        if (str.includes('480')) return { icon: 'sd', badge: 'STD', desc: t('dataSaver'), size: format.size || '-- MB' };
-        return { icon: 'videocam', badge: 'MP4', desc: t('standard'), size: format.size || '-- MB' };
+        if (str.includes('1080')) return { icon: 'hd', badge: 'Full HD', desc: t('bestQuality'), size: sizeVal };
+        if (str.includes('720')) return { icon: 'hd', badge: 'HD', desc: t('goodForPhones'), size: sizeVal };
+        if (str.includes('480')) return { icon: 'sd', badge: 'STD', desc: t('dataSaver'), size: sizeVal };
+        return { icon: 'videocam', badge: 'MP4', desc: t('standard'), size: sizeVal };
     };
 
     return (
@@ -126,7 +170,11 @@ export default function QualitySelectionModal({
                                         </View>
 
                                         <View style={styles.optionRight}>
-                                            <Text style={styles.optionSize}>{ui.size}</Text>
+                                            {fetchingSizes ? (
+                                                <ActivityIndicator size="small" color={theme.primary} />
+                                            ) : (
+                                                <Text style={styles.optionSize}>{ui.size}</Text>
+                                            )}
                                             <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
                                                 {isSelected && <View style={styles.radioInner} />}
                                             </View>

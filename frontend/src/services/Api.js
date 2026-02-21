@@ -28,6 +28,26 @@ export default {
         }
     },
 
+    getVideoSizes: async (videoId) => {
+        try {
+            const response = await api.get('/video-info', { params: { video_id: videoId } });
+            return response.data;
+        } catch (error) {
+            console.error("Video Sizes API Error:", error);
+            throw error;
+        }
+    },
+
+    getDownloadProgress: async (videoId) => {
+        try {
+            const response = await api.get(`/progress/${videoId}`);
+            return response.data;
+        } catch (error) {
+            console.error("Progress API Error:", error);
+            return null; // Don't throw to avoid crashing the interval
+        }
+    },
+
     downloadVideo: async (videoId, quality) => {
         try {
             const response = await api.post('/download', {

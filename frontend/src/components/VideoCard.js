@@ -2,23 +2,37 @@ import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, ImageBackground, StyleSheet, Animated } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useDownloads } from '../context/DownloadContext';
+import { useTheme as useAppTheme } from '../context/ThemeContext';
 
-export default function VideoCard({ video, theme, onDownload, onMoreInfo }) {
+export default function VideoCard({ video, theme, onDownload, onMoreInfo, onPlay }) {
     const styles = useMemo(() => createStyles(theme), [theme]);
-    const { activeDownloads } = useDownloads();
+    const { activeDownloads, completedDownloads } = useDownloads();
+    const { t } = useAppTheme();
+
+    const isAudioCompleted = completedDownloads.some(d => d.id === video.id && d.quality === 'audio');
+    const isVideoCompleted = completedDownloads.some(d => d.id === video.id && d.quality !== 'audio');
+    const activeData = activeDownloads[video.id];
+    const GREEN_COLOR = '#4CAF50';
 
     return (
         <View style={styles.cardContainer}>
             <View style={styles.contentRow}>
                 {/* Thumbnail */}
-                <View style={styles.thumbnailContainer}>
+                <TouchableOpacity
+                    style={styles.thumbnailContainer}
+                    onPress={() => onPlay ? onPlay(video) : null}
+                    activeOpacity={0.8}
+                >
                     <ImageBackground source={{ uri: video.thumbnail }} style={styles.thumbnailImage} />
+                    <View style={styles.playOverlay}>
+                        <MaterialIcons name="play-arrow" size={32} color="white" />
+                    </View>
                     <View style={[styles.durationBadge, video.isLive && { backgroundColor: theme.primary }]}>
                         <Text style={styles.durationText}>
                             {video.isLive ? 'LIVE' : video.duration}
                         </Text>
                     </View>
-                </View>
+                </TouchableOpacity>
 
                 {/* Info and Actions */}
                 <View style={styles.infoContainer}>
@@ -40,21 +54,33 @@ export default function VideoCard({ video, theme, onDownload, onMoreInfo }) {
                     {/* Quick Actions */}
                     <View style={styles.actionsRow}>
                         <TouchableOpacity
-                            style={[styles.quickButton, { cursor: 'pointer' }]}
+                            style={[
+                                styles.quickButton,
+                                { cursor: 'pointer' },
+                                isAudioCompleted && { backgroundColor: `${GREEN_COLOR}20` }
+                            ]}
                             onPress={() => onDownload('audio')}
                             activeOpacity={0.7}
+                            accessibilityLabel={isAudioCompleted ? `${t('downloaded')} MP3` : 'Download MP3'}
+                            accessibilityRole="button"
                         >
-                            <MaterialIcons name="music-note" size={16} color={theme.text} />
-                            <Text style={styles.quickButtonText}>MP3</Text>
+                            <MaterialIcons name={isAudioCompleted ? "check-circle" : "music-note"} size={16} color={isAudioCompleted ? GREEN_COLOR : theme.text} />
+                            <Text style={[styles.quickButtonText, isAudioCompleted && { color: GREEN_COLOR }]}>MP3</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                            style={[styles.quickButton, { cursor: 'pointer' }]}
+                            style={[
+                                styles.quickButton,
+                                { cursor: 'pointer' },
+                                isVideoCompleted && { backgroundColor: `${GREEN_COLOR}20` }
+                            ]}
                             onPress={() => onDownload('1080p')}
                             activeOpacity={0.7}
+                            accessibilityLabel={isVideoCompleted ? `${t('downloaded')} MP4` : 'Download MP4'}
+                            accessibilityRole="button"
                         >
-                            <MaterialIcons name="movie" size={16} color={theme.text} />
-                            <Text style={styles.quickButtonText}>{video.isLive ? 'REC' : 'MP4'}</Text>
+                            <MaterialIcons name={isVideoCompleted ? "check-circle" : "movie"} size={16} color={isVideoCompleted ? GREEN_COLOR : theme.text} />
+                            <Text style={[styles.quickButtonText, isVideoCompleted && { color: GREEN_COLOR }]}>{video.isLive ? 'REC' : 'MP4'}</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -67,20 +93,25 @@ export default function VideoCard({ video, theme, onDownload, onMoreInfo }) {
                     </View>
 
                     {/* Progress Bar */}
-                    {activeDownloads[video.id] && (
-                        <View style={styles.progressContainer}>
+                    {activeData && (
+                        <View style={styles.progressContainer} accessibilityLiveRegion="polite" accessibilityLabel={`${t('downloading')} ${activeData.progress} percent`}>
                             <View style={styles.progressHeaderRow}>
-                                <Text style={styles.progressText}>Downloading...</Text>
+                                <Text style={styles.progressText}>{t('downloading')}</Text>
                                 <Text style={styles.progressPercentage}>
-                                    {activeDownloads[video.id].progress}%
+                                    {activeData.progress}%
                                 </Text>
                             </View>
                             <View style={styles.progressBarTrack}>
-                                <View style={[styles.progressBarFill, { width: `${activeDownloads[video.id].progress}%` }]} />
+                                <View style={[styles.progressBarFill, { width: `${activeData.progress}%` }]} />
                             </View>
-                            <Text style={styles.progressTimeLeft}>
-                                ~{activeDownloads[video.id].timeLeft}s remaining
-                            </Text>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                                <Text style={styles.progressTimeLeft}>
+                                    ~{activeData.timeLeft}s left
+                                </Text>
+                                <Text style={styles.progressSpeed} importantForAccessibility="no">
+                                    {activeData.speed}
+                                </Text>
+                            </View>
                         </View>
                     )}
                 </View>
@@ -120,6 +151,12 @@ const createStyles = (theme) => {
         thumbnailImage: {
             width: '100%',
             height: '100%',
+        },
+        playOverlay: {
+            ...StyleSheet.absoluteFillObject,
+            backgroundColor: 'rgba(0,0,0,0.3)',
+            alignItems: 'center',
+            justifyContent: 'center',
         },
         durationBadge: {
             position: 'absolute',
@@ -233,8 +270,11 @@ const createStyles = (theme) => {
         progressTimeLeft: {
             fontSize: s(10),
             color: theme.subText,
-            marginTop: 4,
-            textAlign: 'right'
+        },
+        progressSpeed: {
+            fontSize: s(10),
+            color: theme.subText,
+            fontWeight: '600'
         }
     });
 };

@@ -10,6 +10,7 @@ import { useDownloads } from '../context/DownloadContext';
 import VideoCard from '../components/VideoCard';
 import VoiceSearchOverlay from '../components/VoiceSearchOverlay';
 import QualitySelectionModal from '../components/QualitySelectionModal';
+import VideoPreviewModal from '../components/VideoPreviewModal';
 
 const RECENT_SEARCHES_KEY = '@recent_searches';
 const DEFAULT_CHIPS = ['Music', 'Podcasts', 'News'];
@@ -39,6 +40,10 @@ export default function HomeScreen({ navigation }) {
     const [videoFormats, setVideoFormats] = useState([]);
     const [fetchingInfo, setFetchingInfo] = useState(false);
 
+    // Preview
+    const [previewVideo, setPreviewVideo] = useState(null);
+    const completedDownloads = useDownloads().completedDownloads;
+
     useEffect(() => {
         loadRecentSearches();
         fetchTrending();
@@ -53,13 +58,14 @@ export default function HomeScreen({ navigation }) {
     useEffect(() => {
         if (searchQuery.trim().length > 0) {
             const q = searchQuery.toLowerCase().trim();
-            const allAvailable = [...new Set([...DEFAULT_CHIPS, ...recentSearches])];
+            const translatedChips = [t('music'), t('podcasts'), t('news')];
+            const allAvailable = [...new Set([...translatedChips, ...recentSearches])];
             const filtered = allAvailable.filter(item => item.toLowerCase().includes(q) && item.toLowerCase() !== q);
             setSuggestions(filtered.slice(0, 5));
         } else {
             setSuggestions([]);
         }
-    }, [searchQuery, recentSearches]);
+    }, [searchQuery, recentSearches, t]);
 
     const loadRecentSearches = async () => {
         try {
@@ -76,7 +82,8 @@ export default function HomeScreen({ navigation }) {
         if (!query.trim()) return;
         try {
             const lowerQuery = query.toLowerCase().trim();
-            if (DEFAULT_CHIPS.map(c => c.toLowerCase()).includes(lowerQuery)) return; // Don't save default chips to history
+            const translatedChips = [t('music').toLowerCase(), t('podcasts').toLowerCase(), t('news').toLowerCase()];
+            if (translatedChips.includes(lowerQuery) || DEFAULT_CHIPS.map(c => c.toLowerCase()).includes(lowerQuery)) return; // Don't save default chips to history
 
             const filtered = recentSearches.filter(q => q.toLowerCase().trim() !== lowerQuery);
             const updated = [query.trim(), ...filtered].slice(0, 10);
@@ -169,7 +176,15 @@ export default function HomeScreen({ navigation }) {
             }
         };
 
-        recognition.onerror = () => setVoiceSearchVisible(false);
+        recognition.onerror = (e) => {
+            console.error("Voice Error", e);
+            if (e.error === 'not-allowed') {
+                showToast("Microphone access denied. Please allow it in settings.", "error");
+            } else {
+                showToast("Voice search error: " + e.error, "error");
+            }
+            setVoiceSearchVisible(false);
+        };
         recognition.onend = () => setVoiceSearchVisible(false);
 
         // Show visibility immediately before start to provide visual feedback instantly
@@ -178,6 +193,7 @@ export default function HomeScreen({ navigation }) {
             recognition.start();
         } catch (e) {
             console.error(e);
+            showToast("Failed to start voice recognition.", "error");
             setVoiceSearchVisible(false);
         }
     };
@@ -194,7 +210,7 @@ export default function HomeScreen({ navigation }) {
         try {
             await api.downloadVideo(video.id, quality);
             showToast(t('downloadSuccess'), "success");
-            startSimulation(video.id);
+            startSimulation(video, quality);
         } catch (error) {
             console.error("Quick Download Error:", error);
             showToast(t('downloadError'), "error");
@@ -228,6 +244,7 @@ export default function HomeScreen({ navigation }) {
                 theme={theme}
                 onDownload={(quality) => handleQuickDownload(video, quality)}
                 onMoreInfo={() => fetchVideoInfo(video)}
+                onPlay={() => setPreviewVideo(video)}
             />
         </View>
     );
@@ -297,13 +314,13 @@ export default function HomeScreen({ navigation }) {
                         </View>
                         <View style={styles.chipsContainer}>
                             {/* Persistent Chips */}
-                            {DEFAULT_CHIPS.map((item, index) => (
+                            {['music', 'podcasts', 'news'].map((itemKey, index) => (
                                 <TouchableOpacity
                                     key={`default-${index}`}
                                     style={[styles.filterChip, { backgroundColor: theme.primary, borderColor: theme.primary, cursor: 'pointer' }]}
-                                    onPress={() => handleSearch(item)}
+                                    onPress={() => handleSearch(t(itemKey))}
                                 >
-                                    <Text style={[styles.filterChipText, { color: '#fff' }]}>{item}</Text>
+                                    <Text style={[styles.filterChipText, { color: '#fff' }]}>{t(itemKey)}</Text>
                                 </TouchableOpacity>
                             ))}
                             {/* History Chips */}
@@ -350,6 +367,23 @@ export default function HomeScreen({ navigation }) {
                 isFetching={fetchingInfo}
                 theme={theme}
                 onDownload={(quality) => handleQuickDownload(selectedVideo, quality)}
+            />
+
+            <VideoPreviewModal
+                visible={!!previewVideo}
+                video={previewVideo}
+                theme={theme}
+                t={t}
+                completedDownloads={completedDownloads}
+                onClose={() => setPreviewVideo(null)}
+                onDownload={(quality) => {
+                    handleQuickDownload(previewVideo, quality);
+                    setPreviewVideo(null);
+                }}
+                onMoreInfo={(v) => {
+                    setPreviewVideo(null);
+                    fetchVideoInfo(previewVideo);
+                }}
             />
         </SafeAreaView>
     );

@@ -9,6 +9,7 @@ import { useDownloads } from '../context/DownloadContext';
 import VideoCard from '../components/VideoCard';
 import VoiceSearchOverlay from '../components/VoiceSearchOverlay';
 import QualitySelectionModal from '../components/QualitySelectionModal';
+import VideoPreviewModal from '../components/VideoPreviewModal';
 
 export default function SearchResultsScreen({ route, navigation }) {
     const { theme, t } = useTheme();
@@ -24,6 +25,10 @@ export default function SearchResultsScreen({ route, navigation }) {
     const [isModalVisible, setModalVisible] = useState(false);
     const [videoFormats, setVideoFormats] = useState([]);
     const [fetchingInfo, setFetchingInfo] = useState(false);
+
+    // Preview
+    const [previewVideo, setPreviewVideo] = useState(null);
+    const completedDownloads = useDownloads().completedDownloads;
 
     // Voice Search
     const [voiceSearchVisible, setVoiceSearchVisible] = useState(false);
@@ -88,7 +93,7 @@ export default function SearchResultsScreen({ route, navigation }) {
         try {
             await api.downloadVideo(video.id, quality);
             showToast(t('downloadSuccess'), "success");
-            startSimulation(video.id);
+            startSimulation(video, quality);
         } catch (error) {
             console.error("Quick Download Error:", error);
             showToast(t('downloadError'), "error");
@@ -132,7 +137,15 @@ export default function SearchResultsScreen({ route, navigation }) {
             }
         };
 
-        recognition.onerror = () => setVoiceSearchVisible(false);
+        recognition.onerror = (e) => {
+            console.error("Voice Error", e);
+            if (e.error === 'not-allowed') {
+                showToast("Microphone access denied. Please allow it in settings.", "error");
+            } else {
+                showToast("Voice search error: " + e.error, "error");
+            }
+            setVoiceSearchVisible(false);
+        };
         recognition.onend = () => setVoiceSearchVisible(false);
 
         setVoiceSearchVisible(true);
@@ -140,6 +153,7 @@ export default function SearchResultsScreen({ route, navigation }) {
             recognition.start();
         } catch (e) {
             console.error(e);
+            showToast("Failed to start voice recognition.", "error");
             setVoiceSearchVisible(false);
         }
     };
@@ -198,6 +212,7 @@ export default function SearchResultsScreen({ route, navigation }) {
                                 theme={theme}
                                 onDownload={(quality) => handleQuickDownload(video, quality)}
                                 onMoreInfo={() => fetchVideoInfo(video)}
+                                onPlay={() => setPreviewVideo(video)}
                             />
                         ))
                     )}
@@ -220,6 +235,23 @@ export default function SearchResultsScreen({ route, navigation }) {
                 isFetching={fetchingInfo}
                 theme={theme}
                 onDownload={(quality) => handleQuickDownload(selectedVideo, quality)}
+            />
+
+            <VideoPreviewModal
+                visible={!!previewVideo}
+                video={previewVideo}
+                theme={theme}
+                t={t}
+                completedDownloads={completedDownloads}
+                onClose={() => setPreviewVideo(null)}
+                onDownload={(quality) => {
+                    handleQuickDownload(previewVideo, quality);
+                    setPreviewVideo(null);
+                }}
+                onMoreInfo={(v) => {
+                    setPreviewVideo(null);
+                    fetchVideoInfo(previewVideo);
+                }}
             />
         </SafeAreaView>
     );
