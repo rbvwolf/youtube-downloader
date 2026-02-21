@@ -10,7 +10,7 @@ const api = axios.create({
 export default {
     searchVideos: async (query) => {
         try {
-            const response = await api.get('/search', { params: { q: query } });
+            const response = await api.get('/search', { params: { q: query, max_results: 15 } });
             return response.data;
         } catch (error) {
             console.error("Search API Error:", error);

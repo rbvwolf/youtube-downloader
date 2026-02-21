@@ -31,15 +31,16 @@
 
 ### Phase 4: Frontend Core Features & UI
 - [x] **Ana Ekran (Search Header):** M3 SearchBar, Büyüteç, Kırmızı Mikrofon ve Öneriler (Chips)
-- [x] **Sesli Arama:** `@react-native-voice/voice` ile bottom-sheet şeklinde mikrofon/dinleniyor ekranı
-- [x] **Kalite Seçimi:** Video tıklandığında açılan Bottom Sheet ve Radio Button'lar (144p - 4K, MP3)
-- [x] **İndirme Yöneticisi:** Arka plan indirme (Background Fetch) ve Progress Bar entegrasyonu
+- [x] **Sesli Arama:** `window.SpeechRecognition` (Web API) ile sesli arama entegrasyonu
+- [x] **Kalite Seçimi:** Video tıklandığında açılan Modal ve format listesi (144p - 4K, MP3)
+- [x] **İndirme Yöneticisi:** `/download` endpointine bağlanan indirme tetikleyicisi
+- [x] **Bildirimler (Toast):** Başarı/hata durumlarında ekranın altında çıkan kayan Toast sistemi
+- [x] **Tema (Dark Mode):** `ThemeContext` ile karanlık mod desteği
 
 ### Phase 5: Storage, UX Polish & Testing
 - [ ] **Yerel Veritabanı:** İndirme geçmişi için SQLite entegrasyonu
 - [ ] **İndirilenler Sekmesi:** Yatay kartlar, oynat, paylaş ve sil özellikleri
 - [ ] **Kullanıcı İpuçları:** Otomatik link yapıştırma tespiti, emoji destekli sevimli hata mesajları
-- [ ] **Erişilebilirlik:** Aile büyükleri için ayarlardan büyük font seçeneği
 - [ ] Uçtan uca (E2E) testler ve hata ayıklamaları
 
 ## Known Issues
