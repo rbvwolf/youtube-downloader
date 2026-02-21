@@ -4,7 +4,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
 export default function SettingsScreen() {
-    const { theme, isDarkMode, toggleTheme } = useTheme();
+    const { theme, isDarkMode, toggleTheme, setFontSize } = useTheme();
 
     const styles = useMemo(() => createStyles(theme), [theme]);
 
@@ -13,7 +13,7 @@ export default function SettingsScreen() {
             <View style={styles.contentContainer}>
                 <View style={styles.header}>
                     <TouchableOpacity style={[styles.iconBtn, { cursor: 'pointer' }]}>
-                        <MaterialIcons name="arrow-back-ios" size={20} color={theme.text} />
+                        <MaterialIcons name="arrow-back-ios" size={24} color={theme.text} />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>Settings</Text>
                     <View style={styles.iconBtn} />
@@ -48,7 +48,7 @@ export default function SettingsScreen() {
                             </View>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 <Text style={[styles.subText, { marginTop: 0, marginRight: 8 }]}>English (US)</Text>
-                                <MaterialIcons name="chevron-right" size={20} color={theme.iconInactive} />
+                                <MaterialIcons name="chevron-right" size={24} color={theme.iconInactive} />
                             </View>
                         </TouchableOpacity>
 
@@ -80,14 +80,23 @@ export default function SettingsScreen() {
                                 </View>
                             </View>
                             <View style={styles.segmentedControl}>
-                                <TouchableOpacity style={[styles.segmentBtn, { cursor: 'pointer' }]}>
-                                    <Text style={styles.segmentText}>Small</Text>
+                                <TouchableOpacity
+                                    style={[styles.segmentBtn, theme.fontSize === 'small' && styles.segmentBtnActive, { cursor: 'pointer' }]}
+                                    onPress={() => setFontSize('small')}
+                                >
+                                    <Text style={theme.fontSize === 'small' ? styles.segmentTextActive : styles.segmentText}>Small</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity style={[styles.segmentBtn, styles.segmentBtnActive, { cursor: 'pointer' }]}>
-                                    <Text style={styles.segmentTextActive}>Medium</Text>
+                                <TouchableOpacity
+                                    style={[styles.segmentBtn, theme.fontSize === 'medium' && styles.segmentBtnActive, { cursor: 'pointer' }]}
+                                    onPress={() => setFontSize('medium')}
+                                >
+                                    <Text style={theme.fontSize === 'medium' ? styles.segmentTextActive : styles.segmentText}>Medium</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity style={[styles.segmentBtn, { cursor: 'pointer' }]}>
-                                    <Text style={[styles.segmentText, { fontSize: 16 }]}>Large</Text>
+                                <TouchableOpacity
+                                    style={[styles.segmentBtn, theme.fontSize === 'large' && styles.segmentBtnActive, { cursor: 'pointer' }]}
+                                    onPress={() => setFontSize('large')}
+                                >
+                                    <Text style={[theme.fontSize === 'large' ? styles.segmentTextActive : styles.segmentText, { fontSize: theme.fontSize === 'large' ? 14 * theme.fontScale : 16 }]}>Large</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -102,7 +111,7 @@ export default function SettingsScreen() {
                                 </View>
                                 <Text style={[styles.titleText, { color: theme.danger }]}>Clear Search & History</Text>
                             </View>
-                            <MaterialIcons name="chevron-right" size={20} color={theme.dangerBg} />
+                            <MaterialIcons name="chevron-right" size={24} color={theme.dangerBg} />
                         </TouchableOpacity>
                     </View>
 
@@ -117,30 +126,34 @@ export default function SettingsScreen() {
     );
 }
 
-const createStyles = (theme) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.background },
-    contentContainer: { flex: 1, maxWidth: 800, width: '100%', alignSelf: 'center', backgroundColor: theme.contentBackground },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 16 },
-    headerTitle: { fontSize: 20, fontWeight: 'bold', color: theme.text },
-    iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-    scrollContent: { flex: 1, paddingHorizontal: 16 },
-    sectionTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', color: theme.subText, marginBottom: 8, paddingHorizontal: 8 },
-    card: { backgroundColor: theme.card, borderRadius: 16, padding: 16, marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: theme.isDark ? 0.2 : 0.05, shadowRadius: 8, elevation: 2 },
-    row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    flex1: { flex: 1, paddingHorizontal: 16 },
-    borderBottom: { borderBottomWidth: 1, borderBottomColor: theme.border },
-    circleIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-    circleIconSmall: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
-    titleText: { fontSize: 16, fontWeight: '600', color: theme.text },
-    subText: { fontSize: 12, fontWeight: '500', color: theme.subText, marginTop: 4 },
-    actionBtn: { backgroundColor: theme.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-    actionBtnText: { color: 'white', fontSize: 14, fontWeight: '600' },
-    segmentedControl: { flexDirection: 'row', backgroundColor: theme.segmentedControlBg, borderRadius: 8, padding: 4 },
-    segmentBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', justifyContent: 'center' },
-    segmentBtnActive: { backgroundColor: theme.card, borderRadius: 6, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
-    segmentText: { fontSize: 14, fontWeight: '500', color: theme.subText },
-    segmentTextActive: { fontSize: 14, fontWeight: '700', color: theme.primary },
-    footer: { alignItems: 'center', marginTop: 16, marginBottom: 32 },
-    footerText: { fontSize: 12, fontWeight: '600', color: theme.iconInactive },
-    footerSubText: { fontSize: 10, color: theme.iconInactive, marginTop: 4 }
-});
+const createStyles = (theme) => {
+    const s = (size) => size * (theme.fontScale || 1);
+
+    return StyleSheet.create({
+        container: { flex: 1, backgroundColor: theme.background },
+        contentContainer: { flex: 1, maxWidth: 800, width: '100%', alignSelf: 'center', backgroundColor: theme.contentBackground },
+        header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 16 },
+        headerTitle: { fontSize: s(20), fontWeight: 'bold', color: theme.text },
+        iconBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+        scrollContent: { flex: 1, paddingHorizontal: 16 },
+        sectionTitle: { fontSize: s(12), fontWeight: '700', textTransform: 'uppercase', color: theme.subText, marginBottom: 8, paddingHorizontal: 8 },
+        card: { backgroundColor: theme.card, borderRadius: 16, padding: 16, marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: theme.isDark ? 0.2 : 0.05, shadowRadius: 8, elevation: 2 },
+        row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+        flex1: { flex: 1, paddingHorizontal: 16 },
+        borderBottom: { borderBottomWidth: 1, borderBottomColor: theme.border },
+        circleIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+        circleIconSmall: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+        titleText: { fontSize: s(16), fontWeight: '600', color: theme.text },
+        subText: { fontSize: s(12), fontWeight: '500', color: theme.subText, marginTop: 4 },
+        actionBtn: { backgroundColor: theme.primary, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+        actionBtnText: { color: 'white', fontSize: s(14), fontWeight: '600' },
+        segmentedControl: { flexDirection: 'row', backgroundColor: theme.segmentedControlBg, borderRadius: 8, padding: 4 },
+        segmentBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', justifyContent: 'center' },
+        segmentBtnActive: { backgroundColor: theme.card, borderRadius: 6, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 1 },
+        segmentText: { fontSize: s(14), fontWeight: '500', color: theme.subText },
+        segmentTextActive: { fontSize: s(14), fontWeight: '700', color: theme.primary },
+        footer: { alignItems: 'center', marginTop: 16, marginBottom: 32 },
+        footerText: { fontSize: s(12), fontWeight: '600', color: theme.iconInactive },
+        footerSubText: { fontSize: s(10), color: theme.iconInactive, marginTop: 4 }
+    });
+};

@@ -36,6 +36,9 @@
 - [x] **İndirme Yöneticisi:** `/download` endpointine bağlanan indirme tetikleyicisi
 - [x] **Bildirimler (Toast):** Başarı/hata durumlarında ekranın altında çıkan kayan Toast sistemi
 - [x] **Tema (Dark Mode):** `ThemeContext` ile karanlık mod desteği
+- [x] **Yönlendirme & Veri Temizliği (Routing & Cleanup):** İç içe `HomeStack` navigatörü ile `HomeScreen` ve `SearchResultsScreen` ayrımı; LocalStorage destekli dinamik arama geçmişi.
+- [x] **Gelişmiş UX:** Arama önerileri, kalıcı (Music, News, vb.) filtreler ve Ana Ekranda "Trending Videos" listesi eklendi.
+- [x] **Kalite Modalı UI:** Seçim modalına videonun kapak resmi, başlığı, kanalı ve belirgin indirme butonları yerleştirildi.
 
 ### Phase 5: Storage, UX Polish & Testing
 - [ ] **Yerel Veritabanı:** İndirme geçmişi için SQLite entegrasyonu

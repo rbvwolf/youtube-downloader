@@ -43,19 +43,30 @@ const darkTheme = {
 
 const ThemeContext = createContext();
 
+const fontScaleMap = {
+    small: 0.85,
+    medium: 1,
+    large: 1.15
+};
+
 export const ThemeProvider = ({ children }) => {
     // Check system preference initially
     const colorScheme = Appearance.getColorScheme();
     const [isDarkMode, setIsDarkMode] = useState(colorScheme === 'dark');
+    const [fontSize, setFontSize] = useState('medium');
 
-    const theme = isDarkMode ? darkTheme : lightTheme;
+    const theme = {
+        ...(isDarkMode ? darkTheme : lightTheme),
+        fontSize,
+        fontScale: fontScaleMap[fontSize]
+    };
 
     const toggleTheme = (val) => {
         setIsDarkMode(val !== undefined ? val : !isDarkMode);
     };
 
     return (
-        <ThemeContext.Provider value={{ theme, isDarkMode, toggleTheme }}>
+        <ThemeContext.Provider value={{ theme, isDarkMode, toggleTheme, setFontSize }}>
             {children}
         </ThemeContext.Provider>
     );
