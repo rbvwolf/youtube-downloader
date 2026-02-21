@@ -11,10 +11,11 @@ import re
 app = FastAPI(title="Youtube-Downloader API")
 
 # Frontend (React Native) ile haberleşebilmek için CORS ayarları
+# NOT: allow_credentials=True ile allow_origins=["*"] birlikte kullanılamaz (CORS spec).
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -34,6 +35,8 @@ class DownloadRequest(BaseModel):
 
 # Global dictionary to track active downloads for cancellation
 active_downloads = {}
+# Hızlı iptal flag'leri — progress_hook anında kontrol eder
+cancel_flags = {}
 
 @app.get("/search")
 async def search(q: str, max_results: int = 10):
@@ -67,22 +70,27 @@ async def search(q: str, max_results: int = 10):
 async def get_suggestions(q: str):
     """
     Fetches search suggestions from YouTube's autocomplete API.
+    Returns: { "suggestions": ["sug1", "sug2", ...] }
     """
     import requests
-    import json
     try:
         url = f"http://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q={q}"
-        response = requests.get(url, timeout=5, headers={'Accept-Language': 'tr-TR,tr;q=0.9'})
-        if response.status_code == 200:
-            data = response.json()
-            if len(data) > 1:
-                suggestions = [s for s in data[1] if isinstance(s, str)]
-                return {"suggestions": suggestions[:10]}
+        response = requests.get(url, timeout=5, headers={
+            'Accept-Language': 'tr-TR,tr;q=0.9',
+            'User-Agent': 'Mozilla/5.0'
+        })
+        response.raise_for_status()
+        data = response.json()  # Format: ["query", ["sug1", "sug2", ...]]
+        if isinstance(data, list) and len(data) > 1 and isinstance(data[1], list):
+            suggestions = [s for s in data[1] if isinstance(s, str)]
+            print(f"[Suggestions] q='{q}' => {suggestions[:5]}")
+            return {"suggestions": suggestions[:10]}
         return {"suggestions": []}
     except Exception as e:
+        print(f"[Suggestions ERROR] q='{q}': {e}")
         return {"suggestions": []}
 
-# Alias for frontend compatibility
+# /suggest alias — same response format as /suggestions
 @app.get("/suggest")
 async def suggest_alias(q: str):
     return await get_suggestions(q)
@@ -156,19 +164,41 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
     actual_dir = download_path if download_path else DOWNLOAD_DIR
     os.makedirs(actual_dir, exist_ok=True)
     
+    # Tarayıcı cookie'si ile bot tespitini kesin aşmak için Brave kullanılır.
+    # Brave kurulu değilse try-except ile sessizce atlanır.
+    _cookie_source = None
+    for _browser in ('brave', 'chrome', 'edge', 'firefox'):
+        try:
+            import yt_dlp as _yt
+            with _yt.YoutubeDL({'quiet': True, 'cookiesfrombrowser': (_browser,)}):
+                pass
+            _cookie_source = (_browser,)
+            print(f"[Cookies] {_browser} cookie'si kullanılıyor.")
+            break
+        except Exception:
+            continue
+
     ydl_opts: dict = {
         'quiet': False,
         'noplaylist': True,
         'retries': 10,
         'fragment_retries': 10,
+        # Bot koruma bypass — Brave (veya bulunan) tarayıcı oturumunu kullan
+        **(({'cookiesfrombrowser': _cookie_source}) if _cookie_source else {}),
+        # Anti-throttling: Android client ile web bot kısıtını aşma
+        'extractor_args': {'youtube': ['player_client=android', 'player_skip=web']},
+        # Ağ stabilitesi
+        'socket_timeout': 30,
+        'nocheckcertificate': True,
+        'legacyserverconnect': True,
     }
 
     progress_file = os.path.join(DOWNLOAD_DIR, f"{video_id}_progress.json")
     
     def progress_hook(d):
-        # Check if download was cancelled by user
-        if not active_downloads.get(video_id, True):
-            raise Exception("Download cancelled by user")
+        # Hızlı iptal kontrolü — cancel_flags veya eski active_downloads
+        if cancel_flags.get(video_id) or not active_downloads.get(video_id, True):
+            raise Exception('CANCELLED')
 
         if d['status'] == 'downloading':
             try:
@@ -255,7 +285,13 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
         # 'format': 'bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best'
         # To respect the user's height restriction, we append height condition:
         height = quality.replace('p', '')
-        ydl_opts['format'] = f'bestvideo[ext=mp4][height<={height}][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+        ydl_opts['format'] = (
+            f'bestvideo[height<={height}][ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]'
+            f'/bestvideo[height<={height}][ext=mp4]+bestaudio[ext=m4a]'
+            f'/bestvideo[height<={height}]+bestaudio'
+            f'/best[height<={height}][ext=mp4]'
+            f'/best[height<={height}]'
+        )
         ydl_opts['merge_output_format'] = 'mp4'
         ydl_opts['postprocessors'] = [{
             'key': 'Exec',
@@ -268,17 +304,40 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
     except Exception as e:
-        print(f"İndirme başarısız {video_id}: {e}")
-        try:
-            import json
-            with open(progress_file, 'w') as f:
-                json.dump({"error": str(e)}, f)
-        except: pass
+        is_cancelled = 'CANCELLED' in str(e)
+        print(f"{'İptal edildi' if is_cancelled else 'İndirme başarısız'} {video_id}: {e}")
+
+        if is_cancelled:
+            # İptal edilen indirmeye ait tüm geçici dosyaları temizle
+            import glob
+            patterns = [
+                os.path.join(actual_dir, f'*.part'),
+                os.path.join(actual_dir, f'*.ytdl'),
+                os.path.join(actual_dir, f'*.part-Frag*'),
+            ]
+            for pattern in patterns:
+                for temp_file in glob.glob(pattern):
+                    try:
+                        os.remove(temp_file)
+                        print(f"[Cleanup] Silindi: {temp_file}")
+                    except Exception as ce:
+                        print(f"[Cleanup] Silinemedi {temp_file}: {ce}")
+            # Geçici ilerleme dosyasını hemen sil
+            try:
+                if os.path.exists(progress_file):
+                    os.remove(progress_file)
+            except: pass
+        else:
+            try:
+                import json
+                with open(progress_file, 'w') as f:
+                    json.dump({"error": str(e)}, f)
+            except: pass
     finally:
+        cancel_flags.pop(video_id, None)
         if video_id in active_downloads:
             del active_downloads[video_id]
-        # NOTE: progress file cleanup is handled by the 3s timer in the 'finished' hook.
-        # For cancelled/errored downloads, delete after a short delay so frontend can read the final error state.
+        # Hata/iptal durumunda progress dosyasını 5s sonra sil
         import threading
         def _cleanup_on_cancel():
             import time
@@ -292,12 +351,11 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
 @app.post("/cancel/{video_id}")
 async def cancel_download(video_id: str):
     """
-    Cancels an active download.
+    Aktif indirmeyi iptal eder. Hem cancel_flags hem de active_downloads flag'ini set eder.
     """
-    if video_id in active_downloads:
-        active_downloads[video_id] = False
-        return {"status": "success", "message": "Download cancelled"}
-    return {"status": "error", "message": "No active download found for this video"}
+    cancel_flags[video_id] = True
+    active_downloads[video_id] = False
+    return {"status": "success", "message": "İptal isteği gönderildi"}
 
 @app.post("/download")
 async def download(request: DownloadRequest, background_tasks: BackgroundTasks):

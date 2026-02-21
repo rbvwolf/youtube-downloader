@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ImageBackground, StatusBar, SafeAreaView, StyleSheet, ActivityIndicator, Platform, Modal } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import api from '../services/Api';
-import { formatViews } from '../utils/formatters';
+import { formatViews, formatDuration } from '../utils/formatters';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useDownloads } from '../context/DownloadContext';
@@ -54,7 +54,7 @@ export default function SearchResultsScreen({ route, navigation }) {
                     title: v.title,
                     channel: 'YouTube',
                     views: v.view_count ? `${formatViews(v.view_count)} views` : '',
-                    duration: v.duration ? new Date(v.duration * 1000).toISOString().substring(14, 19) : 'LIVE',
+                    duration: v.duration ? formatDuration(v.duration) : 'LIVE',
                     thumbnail: v.thumbnails && v.thumbnails.length > 0 ? v.thumbnails[0].url : 'https://via.placeholder.com/320x180',
                     isLive: !v.duration
                 }));

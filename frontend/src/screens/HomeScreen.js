@@ -4,7 +4,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import api from '../services/Api';
-import { formatViews } from '../utils/formatters';
+import { formatViews, formatDuration } from '../utils/formatters';
 import { useDownloads } from '../context/DownloadContext';
 import { useSearchHistory } from '../context/SearchContext';
 import VideoCard from '../components/VideoCard';
@@ -99,11 +99,14 @@ export default function HomeScreen({ navigation }) {
 
                 try {
                     const data = await api.getSuggestions(q);
+                    console.log('Gelen Öneriler:', data);
                     let remoteSuggestions = data?.suggestions || [];
                     // Combine local and remote
                     const combined = [...new Set([...localFiltered, ...remoteSuggestions])];
+                    console.log('Birleşik Öneriler:', combined);
                     setSuggestions(combined.slice(0, 8));
                 } catch (e) {
+                    console.log('Öneri fetch hatası:', e);
                     setSuggestions(localFiltered.slice(0, 5));
                 }
             } else {
@@ -157,7 +160,7 @@ export default function HomeScreen({ navigation }) {
                     title: v.title,
                     channel: 'YouTube Engine',
                     views: v.view_count ? `${formatViews(v.view_count)} views` : '',
-                    duration: v.duration ? new Date(v.duration * 1000).toISOString().substring(14, 19) : 'LIVE',
+                    duration: v.duration ? formatDuration(v.duration) : 'LIVE',
                     thumbnail: v.thumbnails && v.thumbnails.length > 0 ? v.thumbnails[0].url : 'https://via.placeholder.com/320x180',
                     isLive: !v.duration
                 }));
@@ -288,7 +291,7 @@ export default function HomeScreen({ navigation }) {
             <View style={styles.contentContainer}>
                 {/* Search Header */}
                 <View style={styles.searchHeaderContainer}>
-                    <View style={{ zIndex: 10, overflow: 'visible' }}>
+                    <View style={{ zIndex: 9999, elevation: 10, overflow: 'visible' }}>
                         <View style={styles.searchBar}>
                             <View style={styles.searchIconContainer}>
                                 <MaterialIcons name="search" size={24} color={theme.iconInactive} />
@@ -435,12 +438,15 @@ const createStyles = (theme) => StyleSheet.create({
     safeArea: { flex: 1, backgroundColor: theme.background },
     contentContainer: {
         flex: 1, maxWidth: 800, width: '100%', alignSelf: 'center',
-        backgroundColor: theme.contentBackground
+        backgroundColor: theme.contentBackground,
+        overflow: 'visible',
     },
     searchHeaderContainer: {
         paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16,
         backgroundColor: theme.headerBackground,
-        zIndex: 10
+        zIndex: 9999,
+        elevation: 10,
+        overflow: 'visible',
     },
     searchBar: {
         flexDirection: 'row', alignItems: 'center', height: 56,
@@ -468,11 +474,11 @@ const createStyles = (theme) => StyleSheet.create({
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: theme.isDark ? 0.5 : 0.18,
         shadowRadius: 20,
-        elevation: 12,
+        elevation: 15,
         borderWidth: 1,
         borderColor: theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)',
-        zIndex: 9999,
-        overflow: 'hidden',
+        zIndex: 10000,
+        overflow: 'visible',
     },
     suggestionItem: {
         flexDirection: 'row',
