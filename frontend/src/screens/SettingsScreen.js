@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, StyleSheet, TextInput } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../context/ThemeContext';
 import { useDownloads } from '../context/DownloadContext';
 import { useToast } from '../context/ToastContext';
@@ -13,6 +14,29 @@ export default function SettingsScreen() {
 
     const [pathModalVisible, setPathModalVisible] = React.useState(false);
     const [tempPath, setTempPath] = React.useState('');
+
+    const handlePickDirectory = async () => {
+        if (Platform.OS === 'web' && window.showDirectoryPicker) {
+            try {
+                const dirHandle = await window.showDirectoryPicker();
+                // Browsers do NOT provide the absolute path for security reasons, just the name.
+                // Thus, showDirectoryPicker is limited. However, we can ask the user to type if needed.
+                // We'll set the path to what they picked (e.g. "Downloads") just as a UI hint, 
+                // but since yt-dlp needs an absolute path, we'll open the modal still so they can type it.
+                // Or better, we populate the modal with the chosen directory name.
+                showToast(`Selected directory: ${dirHandle.name}. Please ensure this is an absolute path.`, 'info');
+                setTempPath(`C:\\Users\\Name\\${dirHandle.name}`);
+                setPathModalVisible(true);
+            } catch (err) {
+                console.log('Directory picker cancelled or failed', err);
+                setTempPath(downloadPath);
+                setPathModalVisible(true);
+            }
+        } else {
+            setTempPath(downloadPath);
+            setPathModalVisible(true);
+        }
+    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -36,7 +60,7 @@ export default function SettingsScreen() {
                                 <Text style={styles.titleText}>{t('downloadLocation')}</Text>
                                 <Text style={styles.subText} numberOfLines={1}>{downloadPath || 'Varsayılan (Default)'}</Text>
                             </View>
-                            <TouchableOpacity style={[styles.actionBtn, { cursor: 'pointer' }]} onPress={() => { setTempPath(downloadPath); setPathModalVisible(true); }}>
+                            <TouchableOpacity style={[styles.actionBtn, { cursor: 'pointer' }]} onPress={handlePickDirectory}>
                                 <Text style={styles.actionBtnText}>{t('change')}</Text>
                             </TouchableOpacity>
                         </View>
@@ -132,7 +156,11 @@ export default function SettingsScreen() {
 
                     <Text style={styles.sectionTitle}>{t('dataManagement')}</Text>
                     <View style={styles.card}>
-                        <TouchableOpacity style={[styles.row, { cursor: 'pointer' }]} onPress={() => { clearHistory(); showToast('History cleared', 'success'); }}>
+                        <TouchableOpacity style={[styles.row, { cursor: 'pointer' }]} onPress={async () => {
+                            await AsyncStorage.removeItem('@recent_searches');
+                            clearHistory();
+                            showToast(t('historyCleared'), 'success');
+                        }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 <View style={[styles.circleIconSmall, { backgroundColor: theme.dangerBg }]}>
                                     <MaterialIcons name="auto-delete" size={20} color={theme.danger} />
@@ -157,7 +185,7 @@ export default function SettingsScreen() {
                     <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
                         <Text style={[styles.modalTitle, { color: theme.text }]}>{t('downloadLocation')}</Text>
                         <Text style={styles.modalSubtitle}>{t('enterPath')}</Text>
-                        <React.native.TextInput
+                        <TextInput
                             style={[styles.textInput, { color: theme.text, backgroundColor: theme.background, borderColor: theme.border }]}
                             value={tempPath}
                             onChangeText={setTempPath}

@@ -18,6 +18,16 @@ export default {
         }
     },
 
+    getSuggestions: async (query) => {
+        try {
+            const response = await api.get('/suggestions', { params: { q: query } });
+            return response.data;
+        } catch (error) {
+            console.error("Suggestions API Error:", error);
+            return { suggestions: [] };
+        }
+    },
+
     getVideoInfo: async (videoId) => {
         try {
             const response = await api.get(`/info/${videoId}`);

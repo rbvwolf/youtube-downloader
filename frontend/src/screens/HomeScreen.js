@@ -56,15 +56,32 @@ export default function HomeScreen({ navigation }) {
     }, [navigation]);
 
     useEffect(() => {
-        if (searchQuery.trim().length > 0) {
-            const q = searchQuery.toLowerCase().trim();
-            const translatedChips = [t('music'), t('podcasts'), t('news')];
-            const allAvailable = [...new Set([...translatedChips, ...recentSearches])];
-            const filtered = allAvailable.filter(item => item.toLowerCase().includes(q) && item.toLowerCase() !== q);
-            setSuggestions(filtered.slice(0, 5));
-        } else {
-            setSuggestions([]);
-        }
+        const fetchSuggestions = async () => {
+            if (searchQuery.trim().length > 0) {
+                const q = searchQuery.toLowerCase().trim();
+                const translatedChips = [t('music'), t('podcasts'), t('news')];
+                const allAvailable = [...new Set([...translatedChips, ...recentSearches])];
+                const localFiltered = allAvailable.filter(item => item.toLowerCase().includes(q) && item.toLowerCase() !== q);
+
+                try {
+                    const data = await api.getSuggestions(q);
+                    let remoteSuggestions = data?.suggestions || [];
+                    // Combine local and remote
+                    const combined = [...new Set([...localFiltered, ...remoteSuggestions])];
+                    setSuggestions(combined.slice(0, 8));
+                } catch (e) {
+                    setSuggestions(localFiltered.slice(0, 5));
+                }
+            } else {
+                setSuggestions([]);
+            }
+        };
+
+        const timeoutId = setTimeout(() => {
+            fetchSuggestions();
+        }, 300); // 300ms debounce
+
+        return () => clearTimeout(timeoutId);
     }, [searchQuery, recentSearches, t]);
 
     const loadRecentSearches = async () => {

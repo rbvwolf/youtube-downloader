@@ -64,7 +64,8 @@ export const translations = {
         voiceNotSupportedPlatform: "Voice search is only supported on web currently.",
         micDenied: "Microphone access denied. Please allow it in settings.",
         fileNotFound: "File not found or deleted from computer.",
-        enterPath: "Enter absolute path (e.g., C:\\Downloads)"
+        enterPath: "Enter absolute path (e.g., C:\\Downloads)",
+        historyCleared: "History cleared successfully."
     },
     tr: {
         // Tabs
@@ -131,6 +132,7 @@ export const translations = {
         voiceNotSupportedPlatform: "Sesli arama şu an sadece web'de destekleniyor.",
         micDenied: "Mikrofon izni reddedildi. Lütfen ayarlardan izin verin.",
         fileNotFound: "Dosya bilgisayarda bulunamadı veya silinmiş.",
-        enterPath: "Tam yolu girin (Örn: C:\\Indirilenler)"
+        enterPath: "Tam yolu girin (Örn: C:\\Indirilenler)",
+        historyCleared: "Geçmiş başarıyla temizlendi."
     }
 };

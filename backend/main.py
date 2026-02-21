@@ -59,6 +59,24 @@ async def search(q: str, max_results: int = 10):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/suggestions")
+async def get_suggestions(q: str):
+    """
+    Fetches search suggestions from YouTube's autocomplete API.
+    """
+    import requests
+    import json
+    try:
+        url = f"http://suggestqueries.google.com/complete/search?client=youtube&ds=yt&client=firefox&q={q}"
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if len(data) > 1:
+                return {"suggestions": data[1]}
+        return {"suggestions": []}
+    except Exception as e:
+        return {"suggestions": []}
+
 @app.get("/info/{video_id}")
 async def get_info(video_id: str):
     """
@@ -162,22 +180,28 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
         elif d['status'] == 'finished':
             try:
                 import json
-                original_filepath = d.get('filename', '')
+                original_filepath = d.get('info_dict', {}).get('filepath', d.get('filename', ''))
+                
+                if not original_filepath:
+                    return
+
                 actual_d = os.path.dirname(original_filepath)
                 final_filename = os.path.basename(original_filepath)
                 
                 # Mirror the replacements done by the Exec post-processor
                 final_filename = final_filename.replace('.mpg.mp3', '.mp3').replace('.mp4.mp3', '.mp3')
+                final_filename = final_filename.replace('.webm.mp3', '.mp3').replace('.m4a.mp3', '.mp3')
                 import re
                 final_filename = re.sub(r'\.mpg (\d+p)\.mp4', r' \1.mp4', final_filename)
                 final_filename = re.sub(r'\.mp4 (\d+p)\.mp4', r' \1.mp4', final_filename)
+                final_filename = re.sub(r'\.webm (\d+p)\.mp4', r' \1.mp4', final_filename)
                 
                 final_filepath = os.path.join(actual_d, final_filename)
                 
                 with open(progress_file, 'w') as f:
                     json.dump({"progress": "100", "speed": "Done", "eta": 0, "completed": True, "filename": final_filepath}, f)
-            except:
-                pass
+            except Exception as e:
+                print("Finished hook error:", e)
 
     ydl_opts['progress_hooks'] = [progress_hook]
 

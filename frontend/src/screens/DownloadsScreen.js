@@ -12,13 +12,14 @@ import { useToast } from '../context/ToastContext';
 export default function DownloadsScreen() {
     const { theme, t } = useTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
-    const { activeDownloads, completedDownloads, downloadPath, startSimulation } = useDownloads();
+    const { activeDownloads, completedDownloads, downloadPath, startSimulation, clearHistory } = useDownloads();
     const { showToast } = useToast();
 
     const [filter, setFilter] = useState('All'); // 'All', 'Active', 'Completed'
 
     // Preview modal states
     const [previewItem, setPreviewItem] = useState(null);
+    const [qualitySheetVisible, setQualitySheetVisible] = useState(false);
 
     const activeList = Object.values(activeDownloads).map(d => ({ ...d, isActive: true }));
     const completedList = completedDownloads.map(d => ({ ...d, isActive: false }));
@@ -34,8 +35,8 @@ export default function DownloadsScreen() {
                 <View style={styles.header}>
                     <View style={styles.rowBetween}>
                         <Text style={styles.headerTitle}>{t('downloadsTitle')}</Text>
-                        <TouchableOpacity style={[styles.iconBtn, { cursor: 'pointer' }]}>
-                            <MaterialIcons name="more-vert" size={24} color={theme.text} />
+                        <TouchableOpacity style={[styles.iconBtn, { cursor: 'pointer' }]} onPress={() => { clearHistory(); showToast('History cleared', 'success'); }}>
+                            <MaterialIcons name="delete-outline" size={24} color={theme.text} />
                         </TouchableOpacity>
                     </View>
 
