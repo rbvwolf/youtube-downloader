@@ -164,27 +164,13 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
     actual_dir = download_path if download_path else DOWNLOAD_DIR
     os.makedirs(actual_dir, exist_ok=True)
     
-    # Tarayıcı cookie'si ile bot tespitini kesin aşmak için Brave kullanılır.
-    # Brave kurulu değilse try-except ile sessizce atlanır.
-    _cookie_source = None
-    for _browser in ('brave', 'chrome', 'edge', 'firefox'):
-        try:
-            import yt_dlp as _yt
-            with _yt.YoutubeDL({'quiet': True, 'cookiesfrombrowser': (_browser,)}):
-                pass
-            _cookie_source = (_browser,)
-            print(f"[Cookies] {_browser} cookie'si kullanılıyor.")
-            break
-        except Exception:
-            continue
-
     ydl_opts: dict = {
         'quiet': False,
         'noplaylist': True,
         'retries': 10,
         'fragment_retries': 10,
-        # Bot koruma bypass — Brave (veya bulunan) tarayıcı oturumunu kullan
-        **(({'cookiesfrombrowser': _cookie_source}) if _cookie_source else {}),
+        # Bot koruma bypass — cookies.txt dosyasından çerez oku
+        'cookiefile': os.path.join(os.path.dirname(__file__), 'cookies.txt'),
         # Anti-throttling: Android client ile web bot kısıtını aşma
         'extractor_args': {'youtube': ['player_client=android', 'player_skip=web']},
         # Ağ stabilitesi
