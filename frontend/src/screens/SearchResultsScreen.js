@@ -5,6 +5,9 @@ import api from '../services/Api';
 import { formatViews } from '../utils/formatters';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
+import VideoCard from '../components/VideoCard';
+import VoiceSearchOverlay from '../components/VoiceSearchOverlay';
+import QualitySelectionModal from '../components/QualitySelectionModal';
 
 export default function SearchResultsScreen({ route, navigation }) {
     const { theme } = useTheme();
@@ -16,10 +19,14 @@ export default function SearchResultsScreen({ route, navigation }) {
     const [videos, setVideos] = useState([]);
     const [loading, setLoading] = useState(false);
     const [selectedVideo, setSelectedVideo] = useState(null);
-    const [isListening, setIsListening] = useState(false);
     const [isModalVisible, setModalVisible] = useState(false);
-    const [videoFormats, setVideoFormats] = useState({ video_id: null, title: '', formats: [] });
+    const [videoFormats, setVideoFormats] = useState([]);
     const [fetchingInfo, setFetchingInfo] = useState(false);
+
+    // Voice Search
+    const [voiceSearchVisible, setVoiceSearchVisible] = useState(false);
+    const [voiceTranscript, setVoiceTranscript] = useState('');
+    const recognitionRef = React.useRef(null);
 
     useEffect(() => {
         if (initialQuery) {
@@ -60,11 +67,7 @@ export default function SearchResultsScreen({ route, navigation }) {
         try {
             const data = await api.getVideoInfo(video.id);
             if (data && data.qualities) {
-                setVideoFormats({
-                    video_id: video.id,
-                    title: data.details?.title || video.title,
-                    formats: data.qualities
-                });
+                setVideoFormats(data.qualities);
             } else {
                 showToast("Format details could not be found", "error");
             }
@@ -77,14 +80,14 @@ export default function SearchResultsScreen({ route, navigation }) {
         }
     };
 
-    const triggerDownload = async (quality) => {
-        setModalVisible(false); // Close modal first
-        showToast("Starting download...", "info"); // Feedback that request is sent
+    const handleQuickDownload = async (video, quality) => {
+        setModalVisible(false);
+        showToast(`Starting ${quality === 'audio' ? 'MP3' : 'MP4'} download...`, "info");
         try {
-            await api.downloadVideo(videoFormats.video_id, quality);
+            await api.downloadVideo(video.id, quality);
             showToast("Download started successfully!", "success");
         } catch (error) {
-            console.error("Download failed:", error);
+            console.error("Quick Download Error:", error);
             showToast("Failed to start download.", "error");
         }
     };
@@ -102,29 +105,41 @@ export default function SearchResultsScreen({ route, navigation }) {
         }
 
         const recognition = new SpeechRecognition();
-        recognition.lang = 'tr-TR';
+        recognitionRef.current = recognition;
+        recognition.lang = 'en-US';
+        recognition.interimResults = true;
 
         recognition.onstart = () => {
-            setIsListening(true);
+            setVoiceTranscript('');
+            setVoiceSearchVisible(true);
         };
 
         recognition.onresult = (event) => {
-            const transcript = event.results[0][0].transcript;
-            setSearchQuery(transcript);
-            handleSearch(transcript);
-            setIsListening(false);
+            let current = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                current += event.results[i][0].transcript;
+            }
+            setVoiceTranscript(current);
+
+            if (event.results[0].isFinal) {
+                setTimeout(() => {
+                    setVoiceSearchVisible(false);
+                    setSearchQuery(current);
+                    handleSearch(current);
+                }, 1000);
+            }
         };
 
-        recognition.onerror = (event) => {
-            console.error('Speech recognition error', event.error);
-            setIsListening(false);
-        };
-
-        recognition.onend = () => {
-            setIsListening(false);
-        };
-
+        recognition.onerror = () => setVoiceSearchVisible(false);
+        recognition.onend = () => setVoiceSearchVisible(false);
         recognition.start();
+    };
+
+    const cancelVoiceSearch = () => {
+        if (recognitionRef.current) {
+            recognitionRef.current.stop();
+        }
+        setVoiceSearchVisible(false);
     };
 
     return (
@@ -154,7 +169,7 @@ export default function SearchResultsScreen({ route, navigation }) {
                             onPress={startVoiceSearch}
                             style={[styles.micButton, { cursor: 'pointer' }]}
                         >
-                            <MaterialIcons name="mic" size={24} color={isListening ? theme.background : theme.primary} />
+                            <MaterialIcons name="mic" size={24} color={voiceSearchVisible ? theme.background : theme.primary} />
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -168,113 +183,35 @@ export default function SearchResultsScreen({ route, navigation }) {
                         </View>
                     ) : (
                         videos.map((video) => (
-                            <TouchableOpacity
+                            <VideoCard
                                 key={video.id}
-                                style={[styles.videoItemContainer, { cursor: 'pointer' }]}
-                                onPress={() => fetchVideoInfo(video)}
-                                activeOpacity={0.8}
-                            >
-                                <View style={styles.thumbnailContainer}>
-                                    <ImageBackground source={{ uri: video.thumbnail }} style={styles.thumbnailImage} />
-                                    <View style={styles.durationBadge}>
-                                        <Text style={styles.durationText}>
-                                            {video.isLive ? 'LIVE' : video.duration}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <View style={styles.videoInfoContainer}>
-                                    <View style={styles.channelAvatar} />
-                                    <View style={styles.videoTextContainer}>
-                                        <Text style={styles.videoTitle} numberOfLines={2}>
-                                            {video.title}
-                                        </Text>
-                                        <Text style={styles.videoMetaText}>
-                                            {video.channel} {video.views ? `• ${video.views}` : ''}
-                                        </Text>
-                                    </View>
-                                    <TouchableOpacity style={[styles.moreButton, { cursor: 'pointer' }]}>
-                                        <MaterialIcons name="more-vert" size={20} color={theme.iconInactive} />
-                                    </TouchableOpacity>
-                                </View>
-                            </TouchableOpacity>
+                                video={video}
+                                theme={theme}
+                                onDownload={(quality) => handleQuickDownload(video, quality)}
+                                onMoreInfo={() => fetchVideoInfo(video)}
+                            />
                         ))
                     )}
                     <View style={styles.bottomPadding} />
                 </ScrollView>
             </View>
 
-            {/* Quality Selection Modal */}
-            <Modal
-                animationType="slide"
-                transparent={true}
+            <VoiceSearchOverlay
+                visible={voiceSearchVisible}
+                onCancel={cancelVoiceSearch}
+                transcript={voiceTranscript}
+                theme={theme}
+            />
+
+            <QualitySelectionModal
                 visible={isModalVisible}
-                onRequestClose={() => setModalVisible(false)}
-            >
-                <TouchableOpacity
-                    style={styles.modalOverlay}
-                    activeOpacity={1}
-                    onPress={() => setModalVisible(false)}
-                >
-                    <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
-                        <View style={styles.modalDragHandle} />
-
-                        {selectedVideo && (
-                            <View style={styles.modalVideoHeader}>
-                                <ImageBackground source={{ uri: selectedVideo.thumbnail }} style={styles.modalThumbnail} />
-                                <View style={styles.modalVideoInfo}>
-                                    <Text style={styles.modalTitle} numberOfLines={2}>
-                                        {selectedVideo.title}
-                                    </Text>
-                                    <Text style={styles.modalChannel}>
-                                        {selectedVideo.channel}
-                                    </Text>
-                                </View>
-                            </View>
-                        )}
-
-                        <Text style={styles.modalSectionTitle}>Download Quality</Text>
-
-                        {fetchingInfo ? (
-                            <View style={styles.modalLoading}>
-                                <ActivityIndicator size="large" color={theme.primary} />
-                                <Text style={styles.modalLoadingText}>Fetching qualities...</Text>
-                            </View>
-                        ) : (
-                            <ScrollView style={{ marginTop: 8 }} showsVerticalScrollIndicator={false}>
-                                {videoFormats.formats.map((format, idx) => (
-                                    <TouchableOpacity
-                                        key={idx}
-                                        style={[styles.formatOption, { cursor: 'pointer' }]}
-                                        onPress={() => triggerDownload(format.quality)}
-                                    >
-                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                            <View style={[styles.formatIconContainer, { backgroundColor: theme.chipInactiveBg }]}>
-                                                <MaterialIcons
-                                                    name={format.quality === 'audio' ? 'audiotrack' : 'videocam'}
-                                                    size={24}
-                                                    color={theme.primary}
-                                                />
-                                            </View>
-                                            <View style={{ marginLeft: 16 }}>
-                                                <Text style={styles.formatResolution}>
-                                                    {format.label}
-                                                </Text>
-                                                <Text style={styles.formatDetails}>
-                                                    {format.quality === 'audio' ? 'MP3' : 'MP4'} format
-                                                </Text>
-                                            </View>
-                                        </View>
-                                        <View style={styles.downloadButtonSmall}>
-                                            <MaterialIcons name="file-download" size={20} color={theme.card} />
-                                        </View>
-                                    </TouchableOpacity>
-                                ))}
-                                <View style={{ height: 40 }} />
-                            </ScrollView>
-                        )}
-                    </View>
-                </TouchableOpacity>
-            </Modal>
+                onClose={() => setModalVisible(false)}
+                video={selectedVideo}
+                formats={videoFormats}
+                isFetching={fetchingInfo}
+                theme={theme}
+                onDownload={(quality) => handleQuickDownload(selectedVideo, quality)}
+            />
         </SafeAreaView>
     );
 }
@@ -293,33 +230,7 @@ const createStyles = (theme) => {
         videoListContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 16 },
         loadingContainer: { marginTop: 40, alignItems: 'center', justifyContent: 'center' },
         loadingText: { marginTop: 12, color: theme.subText, fontSize: s(14), fontWeight: '500' },
-        videoItemContainer: { marginBottom: 24 },
-        thumbnailContainer: { width: '100%', height: 200, borderRadius: 16, overflow: 'hidden', backgroundColor: theme.chipInactiveBg, marginBottom: 12 },
-        thumbnailImage: { width: '100%', height: '100%' },
-        durationBadge: { position: 'absolute', bottom: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.8)', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 4 },
-        durationText: { fontSize: s(12), fontWeight: '600', color: 'white' },
-        videoInfoContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-        channelAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.border, marginRight: 12 },
-        videoTextContainer: { flex: 1, justifyContent: 'center' },
-        videoTitle: { fontSize: s(16), fontWeight: '700', color: theme.text, marginBottom: 4 },
-        videoMetaText: { fontSize: s(12), fontWeight: '500', color: theme.subText },
-        moreButton: { padding: 4 },
-        bottomPadding: { height: 80 },
-        modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-        modalContent: { backgroundColor: theme.contentBackground, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 24, maxHeight: '80%', maxWidth: 800, width: '100%', alignSelf: 'center' },
-        modalDragHandle: { width: 40, height: 4, backgroundColor: theme.border, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
-        modalVideoHeader: { flexDirection: 'row', marginBottom: 20 },
-        modalThumbnail: { width: 120, height: 68, borderRadius: 8, overflow: 'hidden', marginRight: 16, backgroundColor: theme.chipInactiveBg },
-        modalVideoInfo: { flex: 1, justifyContent: 'center' },
-        modalTitle: { fontSize: s(16), fontWeight: 'bold', color: theme.text, marginBottom: 4 },
-        modalChannel: { fontSize: s(13), color: theme.subText },
-        modalSectionTitle: { fontSize: s(14), fontWeight: 'bold', color: theme.text, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5, opacity: 0.7 },
-        modalLoading: { paddingVertical: 40, alignItems: 'center' },
-        modalLoadingText: { marginTop: 16, color: theme.subText, fontSize: s(14) },
-        formatOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: theme.border, marginBottom: 8, borderRadius: 12 },
-        formatIconContainer: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
-        formatResolution: { fontSize: s(16), fontWeight: '600', color: theme.text },
-        formatDetails: { fontSize: s(12), color: theme.subText, marginTop: 4 },
-        downloadButtonSmall: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.primary, justifyContent: 'center', alignItems: 'center' }
+        loadingText: { marginTop: 12, color: theme.subText, fontSize: s(14), fontWeight: '500' },
+        bottomPadding: { height: 80 }
     });
 };

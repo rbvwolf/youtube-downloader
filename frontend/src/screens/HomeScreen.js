@@ -6,6 +6,9 @@ import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import api from '../services/Api';
 import { formatViews } from '../utils/formatters';
+import VideoCard from '../components/VideoCard';
+import VoiceSearchOverlay from '../components/VoiceSearchOverlay';
+import QualitySelectionModal from '../components/QualitySelectionModal';
 
 const RECENT_SEARCHES_KEY = '@recent_searches';
 const DEFAULT_CHIPS = ['Music', 'Podcasts', 'News'];
@@ -22,6 +25,17 @@ export default function HomeScreen({ navigation }) {
 
     const [trendingVideos, setTrendingVideos] = useState([]);
     const [loadingTrending, setLoadingTrending] = useState(false);
+
+    // Voice Search
+    const [voiceSearchVisible, setVoiceSearchVisible] = useState(false);
+    const [voiceTranscript, setVoiceTranscript] = useState('');
+    const recognitionRef = React.useRef(null);
+
+    // Quality Modal
+    const [qualityModalVisible, setQualityModalVisible] = useState(false);
+    const [selectedVideo, setSelectedVideo] = useState(null);
+    const [videoFormats, setVideoFormats] = useState([]);
+    const [fetchingInfo, setFetchingInfo] = useState(false);
 
     useEffect(() => {
         loadRecentSearches();
@@ -128,38 +142,83 @@ export default function HomeScreen({ navigation }) {
         }
 
         const recognition = new SpeechRecognition();
-        recognition.lang = 'tr-TR';
+        recognitionRef.current = recognition;
+        recognition.lang = 'en-US'; // Or map based on language pref
+        recognition.interimResults = true;
 
-        recognition.onstart = () => setIsListening(true);
-        recognition.onresult = (event) => {
-            const transcript = event.results[0][0].transcript;
-            setSearchQuery(transcript);
-            handleSearch(transcript);
-            setIsListening(false);
+        recognition.onstart = () => {
+            setVoiceTranscript('');
+            setVoiceSearchVisible(true);
         };
-        recognition.onerror = () => setIsListening(false);
-        recognition.onend = () => setIsListening(false);
+
+        recognition.onresult = (event) => {
+            let current = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                current += event.results[i][0].transcript;
+            }
+            setVoiceTranscript(current);
+
+            if (event.results[0].isFinal) {
+                setTimeout(() => {
+                    setVoiceSearchVisible(false);
+                    setSearchQuery(current);
+                    handleSearch(current);
+                }, 1000);
+            }
+        };
+
+        recognition.onerror = () => setVoiceSearchVisible(false);
+        recognition.onend = () => setVoiceSearchVisible(false);
         recognition.start();
     };
 
+    const cancelVoiceSearch = () => {
+        if (recognitionRef.current) {
+            recognitionRef.current.stop();
+        }
+        setVoiceSearchVisible(false);
+    };
+
+    const handleQuickDownload = async (video, quality) => {
+        showToast(`Starting ${quality === 'audio' ? 'MP3' : 'MP4'} download...`, "info");
+        try {
+            await api.downloadVideo(video.id, quality);
+            showToast("Download started successfully!", "success");
+        } catch (error) {
+            console.error("Quick Download Error:", error);
+            showToast("Failed to start download.", "error");
+        }
+    };
+
+    const fetchVideoInfo = async (video) => {
+        setSelectedVideo(video);
+        setQualityModalVisible(true);
+        setFetchingInfo(true);
+        try {
+            const data = await api.getVideoInfo(video.id);
+            if (data && data.qualities) {
+                setVideoFormats(data.qualities);
+            } else {
+                showToast("Format details could not be found", "error");
+            }
+        } catch (error) {
+            console.error("Info fetch failed:", error);
+            showToast("Failed to fetch video formats", "error");
+            setQualityModalVisible(false);
+        } finally {
+            setFetchingInfo(false);
+        }
+    };
+
     const renderVideoCard = (video) => (
-        <TouchableOpacity
-            key={video.id}
-            style={[styles.trendingCard, { cursor: 'pointer' }]}
-            onPress={() => navigation.navigate('SearchResults', { query: video.title })}
-            activeOpacity={0.8}
-        >
-            <View style={styles.trendingThumbnailContainer}>
-                <ImageBackground source={{ uri: video.thumbnail }} style={styles.thumbnailImage} />
-                <View style={styles.durationBadge}>
-                    <Text style={styles.durationText}>{video.isLive ? 'LIVE' : video.duration}</Text>
-                </View>
-            </View>
-            <View style={styles.trendingInfo}>
-                <Text style={styles.trendingTitle} numberOfLines={2}>{video.title}</Text>
-                <Text style={styles.trendingMeta}>{video.views}</Text>
-            </View>
-        </TouchableOpacity>
+        <View style={{ width: 340, marginRight: 16 }} key={video.id}>
+            <VideoCard
+                video={video}
+                theme={theme}
+                onDownload={(quality) => handleQuickDownload(video, quality)}
+                onMoreInfo={() => fetchVideoInfo(video)}
+            />
+        </View>
     );
 
     return (
@@ -264,6 +323,23 @@ export default function HomeScreen({ navigation }) {
                     </View>
                 </ScrollView>
             </View>
+
+            <VoiceSearchOverlay
+                visible={voiceSearchVisible}
+                onCancel={cancelVoiceSearch}
+                transcript={voiceTranscript}
+                theme={theme}
+            />
+
+            <QualitySelectionModal
+                visible={qualityModalVisible}
+                onClose={() => setQualityModalVisible(false)}
+                video={selectedVideo}
+                formats={videoFormats}
+                isFetching={fetchingInfo}
+                theme={theme}
+                onDownload={(quality) => handleQuickDownload(selectedVideo, quality)}
+            />
         </SafeAreaView>
     );
 }
@@ -326,21 +402,5 @@ const createStyles = (theme) => StyleSheet.create({
     trendingSection: {
         marginTop: 8
     },
-    loadingContainer: { padding: 40, alignItems: 'center' },
-    trendingCard: {
-        width: 240, marginRight: 16,
-        backgroundColor: theme.card, borderRadius: 12, overflow: 'hidden',
-        borderWidth: theme.isDark ? 1 : 0, borderColor: theme.border,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2
-    },
-    trendingThumbnailContainer: { width: '100%', height: 135, backgroundColor: theme.chipInactiveBg },
-    thumbnailImage: { width: '100%', height: '100%' },
-    durationBadge: {
-        position: 'absolute', bottom: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.8)',
-        paddingHorizontal: 6, paddingVertical: 4, borderRadius: 4
-    },
-    durationText: { fontSize: 12, fontWeight: '600', color: 'white' },
-    trendingInfo: { padding: 12 },
-    trendingTitle: { fontSize: 14, fontWeight: '600', color: theme.text, marginBottom: 4, height: 38 },
-    trendingMeta: { fontSize: 12, color: theme.subText }
+    loadingContainer: { padding: 40, alignItems: 'center' }
 });
