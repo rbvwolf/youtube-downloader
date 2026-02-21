@@ -1,5 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { Appearance } from 'react-native';
+import { Appearance, useColorScheme } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { translations } from '../utils/locales';
 
 const lightTheme = {
     isDark: false,
@@ -50,23 +52,79 @@ const fontScaleMap = {
 };
 
 export const ThemeProvider = ({ children }) => {
-    // Check system preference initially
-    const colorScheme = Appearance.getColorScheme();
-    const [isDarkMode, setIsDarkMode] = useState(colorScheme === 'dark');
+    // Hooks for detecting system theme changes
+    const systemColorScheme = useColorScheme();
+
+    // State
+    const [themePref, setThemePref] = useState('system'); // 'system', 'light', 'dark'
+    const [language, setLanguage] = useState('en');
     const [fontSize, setFontSize] = useState('medium');
+    const [isReady, setIsReady] = useState(false);
+
+    // Compute actual theme based on preference and system
+    const isDarkMode = themePref === 'system' ? (systemColorScheme === 'dark') : (themePref === 'dark');
+
+    // Load from memory
+    useEffect(() => {
+        const loadSettings = async () => {
+            try {
+                const savedTheme = await AsyncStorage.getItem('@settings_theme');
+                if (savedTheme) setThemePref(savedTheme);
+
+                const savedLang = await AsyncStorage.getItem('@settings_lang');
+                if (savedLang) setLanguage(savedLang);
+
+                const savedFont = await AsyncStorage.getItem('@settings_font');
+                if (savedFont) setFontSize(savedFont);
+            } catch (e) {
+                console.error("Failed to load settings", e);
+            } finally {
+                setIsReady(true);
+            }
+        };
+        loadSettings();
+    }, []);
+
+    const setAppTheme = async (mode) => {
+        setThemePref(mode);
+        try { await AsyncStorage.setItem('@settings_theme', mode); } catch (e) { }
+    };
+
+    const setAppLanguage = async (lang) => {
+        setLanguage(lang);
+        try { await AsyncStorage.setItem('@settings_lang', lang); } catch (e) { }
+    };
+
+    const setAppFontSize = async (size) => {
+        setFontSize(size);
+        try { await AsyncStorage.setItem('@settings_font', size); } catch (e) { }
+    };
 
     const theme = {
         ...(isDarkMode ? darkTheme : lightTheme),
+        themePref,
         fontSize,
         fontScale: fontScaleMap[fontSize]
     };
 
-    const toggleTheme = (val) => {
-        setIsDarkMode(val !== undefined ? val : !isDarkMode);
+    const t = (key) => {
+        return translations[language]?.[key] || translations['en'][key] || key;
     };
 
+    // Prevent flicker on boot
+    if (!isReady) return null;
+
     return (
-        <ThemeContext.Provider value={{ theme, isDarkMode, toggleTheme, setFontSize }}>
+        <ThemeContext.Provider value={{
+            theme,
+            isDarkMode,
+            themePref,
+            setAppTheme,
+            language,
+            setAppLanguage,
+            setFontSize: setAppFontSize,
+            t
+        }}>
             {children}
         </ThemeContext.Provider>
     );

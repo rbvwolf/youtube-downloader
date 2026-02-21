@@ -1,11 +1,10 @@
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, Switch, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 
 export default function SettingsScreen() {
-    const { theme, isDarkMode, toggleTheme, setFontSize } = useTheme();
-
+    const { theme, themePref, setAppTheme, language, setAppLanguage, setFontSize, t } = useTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
 
     return (
@@ -15,101 +14,123 @@ export default function SettingsScreen() {
                     <TouchableOpacity style={[styles.iconBtn, { cursor: 'pointer' }]}>
                         <MaterialIcons name="arrow-back-ios" size={24} color={theme.text} />
                     </TouchableOpacity>
-                    <Text style={styles.headerTitle}>Settings</Text>
+                    <Text style={styles.headerTitle}>{t('settings')}</Text>
                     <View style={styles.iconBtn} />
                 </View>
 
                 <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                    <Text style={styles.sectionTitle}>Downloads</Text>
+                    <Text style={styles.sectionTitle}>{t('downloads')}</Text>
                     <View style={styles.card}>
                         <View style={styles.row}>
                             <View style={[styles.circleIcon, { backgroundColor: theme.primaryBg }]}>
                                 <MaterialIcons name="folder-open" size={24} color={theme.primary} />
                             </View>
                             <View style={styles.flex1}>
-                                <Text style={styles.titleText}>Download Location</Text>
+                                <Text style={styles.titleText}>{t('downloadLocation')}</Text>
                                 <Text style={styles.subText}>/Documents/Downloads/</Text>
                             </View>
                             <TouchableOpacity style={[styles.actionBtn, { cursor: 'pointer' }]}>
-                                <Text style={styles.actionBtnText}>Change</Text>
+                                <Text style={styles.actionBtnText}>{t('change')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
 
-                    <Text style={styles.sectionTitle}>Interface</Text>
+                    <Text style={styles.sectionTitle}>{t('interface')}</Text>
                     <View style={[styles.card, { paddingVertical: 0 }]}>
+
                         {/* Language */}
-                        <TouchableOpacity style={[styles.row, styles.borderBottom, { paddingVertical: 16, cursor: 'pointer' }]}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <View style={[styles.rowColumn, styles.borderBottom]}>
+                            <View style={styles.rowHeader}>
                                 <View style={[styles.circleIconSmall, { backgroundColor: theme.primaryBg }]}>
                                     <MaterialIcons name="language" size={20} color={theme.primary} />
                                 </View>
-                                <Text style={styles.titleText}>Language</Text>
+                                <Text style={styles.titleText}>{t('language')}</Text>
                             </View>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                <Text style={[styles.subText, { marginTop: 0, marginRight: 8 }]}>English (US)</Text>
-                                <MaterialIcons name="chevron-right" size={24} color={theme.iconInactive} />
+                            <View style={styles.segmentedControl}>
+                                <TouchableOpacity
+                                    style={[styles.segmentBtn, language === 'en' && styles.segmentBtnActive, { cursor: 'pointer' }]}
+                                    onPress={() => setAppLanguage('en')}
+                                >
+                                    <Text style={language === 'en' ? styles.segmentTextActive : styles.segmentText}>English</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.segmentBtn, language === 'tr' && styles.segmentBtnActive, { cursor: 'pointer' }]}
+                                    onPress={() => setAppLanguage('tr')}
+                                >
+                                    <Text style={language === 'tr' ? styles.segmentTextActive : styles.segmentText}>Türkçe</Text>
+                                </TouchableOpacity>
                             </View>
-                        </TouchableOpacity>
+                        </View>
 
-                        {/* Dark Mode */}
-                        <View style={[styles.row, styles.borderBottom, { paddingVertical: 16 }]}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        {/* Theme Options */}
+                        <View style={[styles.rowColumn, styles.borderBottom]}>
+                            <View style={styles.rowHeader}>
                                 <View style={[styles.circleIconSmall, { backgroundColor: theme.primaryBg }]}>
                                     <MaterialIcons name="dark-mode" size={20} color={theme.primary} />
                                 </View>
-                                <Text style={styles.titleText}>Dark Mode</Text>
+                                <Text style={styles.titleText}>{t('darkMode')}</Text>
                             </View>
-                            <Switch
-                                value={isDarkMode}
-                                onValueChange={toggleTheme}
-                                trackColor={{ false: theme.border, true: theme.primary }}
-                                thumbColor={'#ffffff'}
-                                style={{ cursor: 'pointer' }}
-                            />
+                            <View style={styles.segmentedControl}>
+                                <TouchableOpacity
+                                    style={[styles.segmentBtn, themePref === 'light' && styles.segmentBtnActive, { cursor: 'pointer' }]}
+                                    onPress={() => setAppTheme('light')}
+                                >
+                                    <Text style={themePref === 'light' ? styles.segmentTextActive : styles.segmentText}>{t('themeLight')}</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.segmentBtn, themePref === 'dark' && styles.segmentBtnActive, { cursor: 'pointer' }]}
+                                    onPress={() => setAppTheme('dark')}
+                                >
+                                    <Text style={themePref === 'dark' ? styles.segmentTextActive : styles.segmentText}>{t('themeDark')}</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.segmentBtn, themePref === 'system' && styles.segmentBtnActive, { cursor: 'pointer' }]}
+                                    onPress={() => setAppTheme('system')}
+                                >
+                                    <Text style={themePref === 'system' ? styles.segmentTextActive : styles.segmentText}>{t('themeSystem')}</Text>
+                                </TouchableOpacity>
+                            </View>
                         </View>
 
                         {/* Font Size */}
-                        <View style={{ padding: 16 }}>
-                            <View style={[styles.row, { paddingVertical: 0, marginBottom: 12 }]}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                    <View style={[styles.circleIconSmall, { backgroundColor: theme.primaryBg }]}>
-                                        <MaterialIcons name="format-size" size={20} color={theme.primary} />
-                                    </View>
-                                    <Text style={styles.titleText}>Font Size</Text>
+                        <View style={styles.rowColumn}>
+                            <View style={styles.rowHeader}>
+                                <View style={[styles.circleIconSmall, { backgroundColor: theme.primaryBg }]}>
+                                    <MaterialIcons name="format-size" size={20} color={theme.primary} />
                                 </View>
+                                <Text style={styles.titleText}>{t('fontSize')}</Text>
                             </View>
                             <View style={styles.segmentedControl}>
                                 <TouchableOpacity
                                     style={[styles.segmentBtn, theme.fontSize === 'small' && styles.segmentBtnActive, { cursor: 'pointer' }]}
                                     onPress={() => setFontSize('small')}
                                 >
-                                    <Text style={theme.fontSize === 'small' ? styles.segmentTextActive : styles.segmentText}>Small</Text>
+                                    <Text style={theme.fontSize === 'small' ? styles.segmentTextActive : styles.segmentText}>{t('fontSmall')}</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={[styles.segmentBtn, theme.fontSize === 'medium' && styles.segmentBtnActive, { cursor: 'pointer' }]}
                                     onPress={() => setFontSize('medium')}
                                 >
-                                    <Text style={theme.fontSize === 'medium' ? styles.segmentTextActive : styles.segmentText}>Medium</Text>
+                                    <Text style={theme.fontSize === 'medium' ? styles.segmentTextActive : styles.segmentText}>{t('fontMedium')}</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                     style={[styles.segmentBtn, theme.fontSize === 'large' && styles.segmentBtnActive, { cursor: 'pointer' }]}
                                     onPress={() => setFontSize('large')}
                                 >
-                                    <Text style={[theme.fontSize === 'large' ? styles.segmentTextActive : styles.segmentText, { fontSize: theme.fontSize === 'large' ? 14 * theme.fontScale : 16 }]}>Large</Text>
+                                    <Text style={theme.fontSize === 'large' ? styles.segmentTextActive : styles.segmentText}>{t('fontLarge')}</Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
                     </View>
 
-                    <Text style={styles.sectionTitle}>Data Management</Text>
+                    <Text style={styles.sectionTitle}>{t('dataManagement')}</Text>
                     <View style={styles.card}>
                         <TouchableOpacity style={[styles.row, { cursor: 'pointer' }]}>
                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                 <View style={[styles.circleIconSmall, { backgroundColor: theme.dangerBg }]}>
                                     <MaterialIcons name="auto-delete" size={20} color={theme.danger} />
                                 </View>
-                                <Text style={[styles.titleText, { color: theme.danger }]}>Clear Search & History</Text>
+                                <Text style={[styles.titleText, { color: theme.danger }]}>{t('clearSearchHistory')}</Text>
                             </View>
                             <MaterialIcons name="chevron-right" size={24} color={theme.dangerBg} />
                         </TouchableOpacity>
@@ -139,6 +160,8 @@ const createStyles = (theme) => {
         sectionTitle: { fontSize: s(12), fontWeight: '700', textTransform: 'uppercase', color: theme.subText, marginBottom: 8, paddingHorizontal: 8 },
         card: { backgroundColor: theme.card, borderRadius: 16, padding: 16, marginBottom: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: theme.isDark ? 0.2 : 0.05, shadowRadius: 8, elevation: 2 },
         row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+        rowColumn: { paddingVertical: 16 },
+        rowHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
         flex1: { flex: 1, paddingHorizontal: 16 },
         borderBottom: { borderBottomWidth: 1, borderBottomColor: theme.border },
         circleIcon: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },

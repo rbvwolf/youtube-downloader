@@ -1,9 +1,11 @@
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, ImageBackground, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ImageBackground, StyleSheet, Animated } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useDownloads } from '../context/DownloadContext';
 
 export default function VideoCard({ video, theme, onDownload, onMoreInfo }) {
     const styles = useMemo(() => createStyles(theme), [theme]);
+    const { activeDownloads } = useDownloads();
 
     return (
         <View style={styles.cardContainer}>
@@ -63,6 +65,24 @@ export default function VideoCard({ video, theme, onDownload, onMoreInfo }) {
                             <MaterialIcons name="add" size={20} color={theme.iconInactive} />
                         </TouchableOpacity>
                     </View>
+
+                    {/* Progress Bar */}
+                    {activeDownloads[video.id] && (
+                        <View style={styles.progressContainer}>
+                            <View style={styles.progressHeaderRow}>
+                                <Text style={styles.progressText}>Downloading...</Text>
+                                <Text style={styles.progressPercentage}>
+                                    {activeDownloads[video.id].progress}%
+                                </Text>
+                            </View>
+                            <View style={styles.progressBarTrack}>
+                                <View style={[styles.progressBarFill, { width: `${activeDownloads[video.id].progress}%` }]} />
+                            </View>
+                            <Text style={styles.progressTimeLeft}>
+                                ~{activeDownloads[video.id].timeLeft}s remaining
+                            </Text>
+                        </View>
+                    )}
                 </View>
             </View>
         </View>
@@ -91,8 +111,8 @@ const createStyles = (theme) => {
             gap: 12,
         },
         thumbnailContainer: {
-            width: 112, // 28rem approx
-            height: 112,
+            width: 160,
+            aspectRatio: 16 / 9,
             borderRadius: 12,
             overflow: 'hidden',
             backgroundColor: theme.chipInactiveBg,
@@ -176,5 +196,45 @@ const createStyles = (theme) => {
             backgroundColor: theme.chipInactiveBg,
             borderRadius: 8,
         },
+        progressContainer: {
+            marginTop: 12,
+            backgroundColor: theme.chipInactiveBg,
+            padding: 8,
+            borderRadius: 8,
+            borderWidth: 1,
+            borderColor: theme.border
+        },
+        progressHeaderRow: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            marginBottom: 6,
+        },
+        progressText: {
+            fontSize: s(12),
+            fontWeight: '600',
+            color: theme.primary,
+        },
+        progressPercentage: {
+            fontSize: s(12),
+            fontWeight: 'bold',
+            color: theme.text,
+        },
+        progressBarTrack: {
+            height: 6,
+            backgroundColor: theme.background,
+            borderRadius: 3,
+            overflow: 'hidden',
+        },
+        progressBarFill: {
+            height: '100%',
+            backgroundColor: theme.primary,
+            borderRadius: 3,
+        },
+        progressTimeLeft: {
+            fontSize: s(10),
+            color: theme.subText,
+            marginTop: 4,
+            textAlign: 'right'
+        }
     });
 };

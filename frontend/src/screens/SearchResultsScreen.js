@@ -5,13 +5,15 @@ import api from '../services/Api';
 import { formatViews } from '../utils/formatters';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
+import { useDownloads } from '../context/DownloadContext';
 import VideoCard from '../components/VideoCard';
 import VoiceSearchOverlay from '../components/VoiceSearchOverlay';
 import QualitySelectionModal from '../components/QualitySelectionModal';
 
 export default function SearchResultsScreen({ route, navigation }) {
-    const { theme } = useTheme();
+    const { theme, t } = useTheme();
     const { showToast } = useToast();
+    const { startSimulation } = useDownloads();
     const styles = useMemo(() => createStyles(theme), [theme]);
 
     const initialQuery = route.params?.query || '';
@@ -85,10 +87,11 @@ export default function SearchResultsScreen({ route, navigation }) {
         showToast(`Starting ${quality === 'audio' ? 'MP3' : 'MP4'} download...`, "info");
         try {
             await api.downloadVideo(video.id, quality);
-            showToast("Download started successfully!", "success");
+            showToast(t('downloadSuccess'), "success");
+            startSimulation(video.id);
         } catch (error) {
             console.error("Quick Download Error:", error);
-            showToast("Failed to start download.", "error");
+            showToast(t('downloadError'), "error");
         }
     };
 
@@ -111,7 +114,6 @@ export default function SearchResultsScreen({ route, navigation }) {
 
         recognition.onstart = () => {
             setVoiceTranscript('');
-            setVoiceSearchVisible(true);
         };
 
         recognition.onresult = (event) => {
@@ -132,7 +134,14 @@ export default function SearchResultsScreen({ route, navigation }) {
 
         recognition.onerror = () => setVoiceSearchVisible(false);
         recognition.onend = () => setVoiceSearchVisible(false);
-        recognition.start();
+
+        setVoiceSearchVisible(true);
+        try {
+            recognition.start();
+        } catch (e) {
+            console.error(e);
+            setVoiceSearchVisible(false);
+        }
     };
 
     const cancelVoiceSearch = () => {
@@ -158,7 +167,7 @@ export default function SearchResultsScreen({ route, navigation }) {
                         </View>
                         <TextInput
                             style={styles.searchInput}
-                            placeholder="Search YouTube..."
+                            placeholder={t('searchPlaceholder')}
                             placeholderTextColor={theme.iconInactive}
                             value={searchQuery}
                             onChangeText={setSearchQuery}
@@ -179,7 +188,7 @@ export default function SearchResultsScreen({ route, navigation }) {
                     {loading ? (
                         <View style={styles.loadingContainer}>
                             <ActivityIndicator size="large" color={theme.primary} />
-                            <Text style={styles.loadingText}>Searching...</Text>
+                            <Text style={styles.loadingText}>{t('searching')}</Text>
                         </View>
                     ) : (
                         videos.map((video) => (

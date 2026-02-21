@@ -14,6 +14,7 @@ import DownloadsScreen from './src/screens/DownloadsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { ToastProvider } from './src/context/ToastContext';
+import { DownloadProvider } from './src/context/DownloadContext';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -83,9 +84,11 @@ function MainApp() {
 export default function App() {
     return (
         <ThemeProvider>
-            <ToastProvider>
-                <MainApp />
-            </ToastProvider>
+            <DownloadProvider>
+                <ToastProvider>
+                    <MainApp />
+                </ToastProvider>
+            </DownloadProvider>
         </ThemeProvider>
     );
 }

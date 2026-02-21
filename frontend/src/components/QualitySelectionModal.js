@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Modal, ActivityIndicator, ImageBackground, StyleSheet, SafeAreaView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
 
 export default function QualitySelectionModal({
     visible,
@@ -11,6 +12,7 @@ export default function QualitySelectionModal({
     theme,
     onDownload
 }) {
+    const { t } = useTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
     const [selectedQuality, setSelectedQuality] = useState(null);
 
@@ -24,15 +26,15 @@ export default function QualitySelectionModal({
         }
     };
 
-    const getFormatUI = (qualityStr) => {
-        const str = qualityStr.toLowerCase();
+    const getFormatUI = (format) => {
+        const str = format.quality.toLowerCase();
         if (str.includes('audio') || str.includes('mp3')) {
-            return { icon: 'headphones', badge: 'MP3', desc: 'Audio Only', size: '4 MB' };
+            return { icon: 'headphones', badge: 'MP3', desc: t('audioOnly'), size: format.size || '-- MB' };
         }
-        if (str.includes('1080')) return { icon: 'hd', badge: 'Full HD', desc: 'Best quality', size: '45 MB' };
-        if (str.includes('720')) return { icon: 'hd', badge: 'HD', desc: 'Good for phones', size: '20 MB' };
-        if (str.includes('480')) return { icon: 'sd', badge: 'STD', desc: 'Data saver', size: '12 MB' };
-        return { icon: 'videocam', badge: 'MP4', desc: 'Standard', size: '--' };
+        if (str.includes('1080')) return { icon: 'hd', badge: 'Full HD', desc: t('bestQuality'), size: format.size || '-- MB' };
+        if (str.includes('720')) return { icon: 'hd', badge: 'HD', desc: t('goodForPhones'), size: format.size || '-- MB' };
+        if (str.includes('480')) return { icon: 'sd', badge: 'STD', desc: t('dataSaver'), size: format.size || '-- MB' };
+        return { icon: 'videocam', badge: 'MP4', desc: t('standard'), size: format.size || '-- MB' };
     };
 
     return (
@@ -75,18 +77,18 @@ export default function QualitySelectionModal({
                         </View>
                     )}
 
-                    <Text style={styles.sectionTitle}>SELECT QUALITY</Text>
+                    <Text style={styles.sectionTitle}>{t('selectQuality').toUpperCase()}</Text>
 
                     {isFetching ? (
                         <View style={styles.loadingContainer}>
                             <ActivityIndicator size="large" color={theme.primary} />
-                            <Text style={styles.loadingText}>Fetching available formats...</Text>
+                            <Text style={styles.loadingText}>{t('fetchingQualities')}</Text>
                         </View>
                     ) : (
                         <ScrollView style={styles.optionsList} showsVerticalScrollIndicator={false}>
                             {formats && formats.map((format, idx) => {
                                 const isSelected = selectedQuality === format.quality;
-                                const ui = getFormatUI(format.quality);
+                                const ui = getFormatUI(format);
 
                                 return (
                                     <TouchableOpacity
@@ -111,7 +113,7 @@ export default function QualitySelectionModal({
                                             <View style={styles.optionTextContainer}>
                                                 <View style={styles.optionTitleRow}>
                                                     <Text style={[styles.optionTitle, isSelected && styles.optionTitleSelected]}>
-                                                        {format.quality === 'audio' ? 'Audio Only' : format.quality}
+                                                        {format.quality === 'audio' ? t('audioOnly') : format.quality}
                                                     </Text>
                                                     <View style={[styles.badge, isSelected && styles.badgeSelected]}>
                                                         <Text style={[styles.badgeText, isSelected && styles.badgeTextSelected]}>
@@ -134,7 +136,8 @@ export default function QualitySelectionModal({
                             })}
                             <View style={{ height: 20 }} />
                         </ScrollView>
-                    )}
+                    )
+                    }
 
                     {/* CTA Button */}
                     <View style={styles.ctaContainer}>
@@ -150,15 +153,15 @@ export default function QualitySelectionModal({
                         >
                             <MaterialIcons name="download" size={24} color={!selectedQuality ? theme.iconInactive : "white"} />
                             <Text style={[styles.ctaText, !selectedQuality && { color: theme.iconInactive }]}>
-                                START DOWNLOAD
+                                {t('startDownload')}
                             </Text>
                         </TouchableOpacity>
                         <SafeAreaView />
                     </View>
 
-                </View>
-            </View>
-        </Modal>
+                </View >
+            </View >
+        </Modal >
     );
 }
 

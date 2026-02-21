@@ -6,6 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import api from '../services/Api';
 import { formatViews } from '../utils/formatters';
+import { useDownloads } from '../context/DownloadContext';
 import VideoCard from '../components/VideoCard';
 import VoiceSearchOverlay from '../components/VoiceSearchOverlay';
 import QualitySelectionModal from '../components/QualitySelectionModal';
@@ -14,8 +15,9 @@ const RECENT_SEARCHES_KEY = '@recent_searches';
 const DEFAULT_CHIPS = ['Music', 'Podcasts', 'News'];
 
 export default function HomeScreen({ navigation }) {
-    const { theme } = useTheme();
+    const { theme, t } = useTheme();
     const { showToast } = useToast();
+    const { startSimulation } = useDownloads();
     const styles = useMemo(() => createStyles(theme), [theme]);
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -108,8 +110,8 @@ export default function HomeScreen({ navigation }) {
     const fetchTrending = async () => {
         setLoadingTrending(true);
         try {
-            // Fetch some generic popular videos
-            const data = await api.searchVideos('trending popular hits');
+            // Fetch Turkish trending videos
+            const data = await api.searchVideos('Türkiye trend videolar');
             if (data && data.results) {
                 const formatted = data.results.slice(0, 5).map(v => ({
                     id: v.id,
@@ -148,7 +150,7 @@ export default function HomeScreen({ navigation }) {
 
         recognition.onstart = () => {
             setVoiceTranscript('');
-            setVoiceSearchVisible(true);
+            // Optional: You could update an inner state here, but visibility is handled synchronously below
         };
 
         recognition.onresult = (event) => {
@@ -169,7 +171,15 @@ export default function HomeScreen({ navigation }) {
 
         recognition.onerror = () => setVoiceSearchVisible(false);
         recognition.onend = () => setVoiceSearchVisible(false);
-        recognition.start();
+
+        // Show visibility immediately before start to provide visual feedback instantly
+        setVoiceSearchVisible(true);
+        try {
+            recognition.start();
+        } catch (e) {
+            console.error(e);
+            setVoiceSearchVisible(false);
+        }
     };
 
     const cancelVoiceSearch = () => {
@@ -183,10 +193,11 @@ export default function HomeScreen({ navigation }) {
         showToast(`Starting ${quality === 'audio' ? 'MP3' : 'MP4'} download...`, "info");
         try {
             await api.downloadVideo(video.id, quality);
-            showToast("Download started successfully!", "success");
+            showToast(t('downloadSuccess'), "success");
+            startSimulation(video.id);
         } catch (error) {
             console.error("Quick Download Error:", error);
-            showToast("Failed to start download.", "error");
+            showToast(t('downloadError'), "error");
         }
     };
 
@@ -235,7 +246,7 @@ export default function HomeScreen({ navigation }) {
                             </View>
                             <TextInput
                                 style={styles.searchInput}
-                                placeholder="Search YouTube or paste link..."
+                                placeholder={t('searchPlaceholder')}
                                 placeholderTextColor={theme.iconInactive}
                                 value={searchQuery}
                                 onChangeText={setSearchQuery}
@@ -277,10 +288,10 @@ export default function HomeScreen({ navigation }) {
                     {/* Fixed & Recent Chips */}
                     <View style={styles.recentSection}>
                         <View style={styles.recentHeader}>
-                            <Text style={styles.sectionTitle}>Discover</Text>
+                            <Text style={styles.sectionTitle}>{t('discover')}</Text>
                             {recentSearches.length > 0 && (
                                 <TouchableOpacity onPress={clearRecentSearches} style={{ cursor: 'pointer' }}>
-                                    <Text style={styles.clearText}>Clear History</Text>
+                                    <Text style={styles.clearText}>{t('clearHistory')}</Text>
                                 </TouchableOpacity>
                             )}
                         </View>
@@ -310,7 +321,7 @@ export default function HomeScreen({ navigation }) {
 
                     {/* Trending Section */}
                     <View style={styles.trendingSection}>
-                        <Text style={styles.sectionTitle}>Trending Videos</Text>
+                        <Text style={styles.sectionTitle}>{t('trendingVideos')}</Text>
                         {loadingTrending ? (
                             <View style={styles.loadingContainer}>
                                 <ActivityIndicator size="large" color={theme.primary} />

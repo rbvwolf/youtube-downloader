@@ -71,12 +71,37 @@ async def get_info(video_id: str):
                 "duration": info.get("duration")
             }
             
-            # Sistem pattern'larına (Memory Bank) göre sabit kalite opsiyonları sunuyoruz
+            formats = info.get('formats', [])
+            
+            def get_size(height=None, is_audio=False):
+                best_size = 0
+                for f in formats:
+                    size = f.get('filesize') or f.get('filesize_approx') or 0
+                    if is_audio:
+                        if f.get('vcodec') == 'none' and f.get('acodec') != 'none':
+                            if size > best_size: best_size = size
+                    else:
+                        if f.get('height') == height and f.get('vcodec') != 'none':
+                            # Just video stream size, yt-dlp merges video+audio so true size is video+audio
+                            # We just approximate by adding the best audio size later if we want, or just return max video size
+                            if size > best_size: best_size = size
+                return best_size
+
+            audio_size = get_size(is_audio=True)
+            
+            def format_mb(video_bytes):
+                # Approximation: video size + audio size
+                total = video_bytes + audio_size if video_bytes else 0
+                if not total and not audio_size: return "-- MB"
+                if not video_bytes:  # Audio only
+                    return f"{audio_size / (1024 * 1024):.1f} MB"
+                return f"{total / (1024 * 1024):.1f} MB"
+
             qualities = [
-                {"quality": "1080p", "label": "Full HD (1080p)"},
-                {"quality": "720p", "label": "HD (720p)"},
-                {"quality": "480p", "label": "Standart (480p)"},
-                {"quality": "audio", "label": "Sadece Ses (MP3)"}
+                {"quality": "audio", "label": "Audio Only (MP3)", "size": format_mb(0)},
+                {"quality": "1080p", "label": "Full HD (1080p)", "size": format_mb(get_size(1080))},
+                {"quality": "720p", "label": "HD (720p)", "size": format_mb(get_size(720))},
+                {"quality": "480p", "label": "Standard (480p)", "size": format_mb(get_size(480))},
             ]
             
             return {
