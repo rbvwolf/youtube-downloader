@@ -208,17 +208,18 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
                 
                 final_filepath = os.path.join(actual_d, final_filename)
                 
-                
                 with open(progress_file, 'w') as f:
                     json.dump({"progress": "100", "speed": "Done", "eta": 0, "completed": True, "filename": final_filepath}, f)
-                    
-                # Clean up the progress file after a short delay or immediately if UI polling doesn't absolutely require it
-                # Actually, the UI polling might need to see "completed": True once. But deleting it is what the user asked for.
-                # If deleted too fast, UI may not catch 100%. But we will respect the user request.
-                if os.path.exists(progress_file):
+                # Clean up the progress file after short delay (frontend reads it one last time)
+                import threading
+                def _cleanup():
+                    import time
+                    time.sleep(3)
                     try:
-                        os.remove(progress_file)
+                        if os.path.exists(progress_file):
+                            os.remove(progress_file)
                     except: pass
+                threading.Thread(target=_cleanup, daemon=True).start()
             except Exception as e:
                 print("Finished hook error:", e)
 
@@ -265,13 +266,14 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
     except Exception as e:
         print(f"İndirme başarısız {video_id}: {e}")
         try:
-            if os.path.exists(progress_file):
-                os.remove(progress_file)
+            import json
+            with open(progress_file, 'w') as f:
+                json.dump({"error": str(e)}, f)
         except: pass
     finally:
         if video_id in active_downloads:
             del active_downloads[video_id]
-        # Ensure cleanup if cancelled
+        # Remove leftover progress file (cancelled or errored downloads)
         try:
             if os.path.exists(progress_file):
                 os.remove(progress_file)
