@@ -161,8 +161,6 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
         'noplaylist': True,
         'retries': 10,
         'fragment_retries': 10,
-        'source_address': '0.0.0.0',   # Force IPv4, avoids YouTube IPv6 throttling
-        'nocheckcertificate': True,    # Skip SSL cert check for stability
     }
 
     progress_file = os.path.join(DOWNLOAD_DIR, f"{video_id}_progress.json")

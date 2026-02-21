@@ -8,12 +8,12 @@ export default function LocalPlayerModal({ visible, item, onClose, theme, t }) {
 
     if (!item || !item.filename) return null;
 
-    // Build URL: use /play?filepath= which serves the absolute local path via FileResponse
-    const fileUrl = `http://127.0.0.1:8000/play?filepath=${encodeURIComponent(item.filename)}`;
+    // Extract just the filename from the full OS path, then serve via static /downloads/ mount
+    const basename = item.filename.split(/[/\\]/).pop();
+    const fileUrl = `http://127.0.0.1:8000/downloads/${encodeURIComponent(basename)}`;
 
-    // Detect audio: either quality='audio' OR file extension is .mp3
-    const filename = item.filename || '';
-    const isAudio = item.quality === 'audio' || filename.toLowerCase().endsWith('.mp3');
+    // Detect audio: quality='audio' OR .mp3 extension
+    const isAudio = item.quality === 'audio' || (basename || '').toLowerCase().endsWith('.mp3');
 
     return (
         <Modal visible={visible} transparent={true} animationType="fade" onRequestClose={onClose}>

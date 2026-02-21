@@ -15,6 +15,39 @@ import VideoPreviewModal from '../components/VideoPreviewModal';
 const RECENT_SEARCHES_KEY = '@recent_searches';
 const DEFAULT_CHIPS = ['Music', 'Podcasts', 'News'];
 
+// YouTube-style suggestion row with hover effect
+function SuggestionRow({ item, isHistory, renderText, theme, styles, onPress }) {
+    const [hovered, setHovered] = React.useState(false);
+    return (
+        <TouchableOpacity
+            style={[
+                styles.suggestionItem,
+                { cursor: 'pointer' },
+                hovered && { backgroundColor: theme.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }
+            ]}
+            onPress={onPress}
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+            activeOpacity={0.8}
+        >
+            <MaterialIcons
+                name={isHistory ? 'history' : 'search'}
+                size={20}
+                color={theme.iconInactive}
+                style={{ marginRight: 14, flexShrink: 0 }}
+            />
+            <View style={{ flex: 1 }}>{renderText()}</View>
+            {/* Arrow to fill current query with suggestion */}
+            <TouchableOpacity
+                style={{ padding: 8, cursor: 'pointer' }}
+                onPress={(e) => { e?.stopPropagation?.(); }}
+            >
+                <MaterialIcons name="north-west" size={16} color={theme.iconInactive} />
+            </TouchableOpacity>
+        </TouchableOpacity>
+    );
+}
+
 export default function HomeScreen({ navigation }) {
     const { theme, t } = useTheme();
     const { showToast } = useToast();
@@ -92,7 +125,25 @@ export default function HomeScreen({ navigation }) {
         saveRecentSearch(query);
         setSearchQuery('');
         setSuggestions([]);
+        setIsSearchFocused(false);
         navigation.navigate('SearchResults', { query });
+    };
+
+    // Renders suggestion text: typed portion normal, suggested suffix bold
+    const renderSuggestionText = (suggestion) => {
+        const q = searchQuery.trim().toLowerCase();
+        const s = suggestion.toLowerCase();
+        if (q && s.startsWith(q)) {
+            const typed = suggestion.slice(0, searchQuery.trim().length);
+            const suggested = suggestion.slice(searchQuery.trim().length);
+            return (
+                <Text style={styles.suggestionText}>
+                    <Text style={{ fontWeight: '400' }}>{typed}</Text>
+                    <Text style={{ fontWeight: '700' }}>{suggested}</Text>
+                </Text>
+            );
+        }
+        return <Text style={[styles.suggestionText, { fontWeight: '700' }]}>{suggestion}</Text>;
     };
 
     const fetchTrending = async () => {
@@ -266,24 +317,27 @@ export default function HomeScreen({ navigation }) {
                             </TouchableOpacity>
                         </View>
 
-                        {/* Suggestions Dropdown - only when focused and have results */}
+                        {/* YouTube-style Suggestions Dropdown */}
                         {isSearchFocused && suggestions.length > 0 && (
-                            <View style={[styles.suggestionsContainer, { zIndex: 9999 }]}>
-                                {suggestions.map((item, index) => (
-                                    <TouchableOpacity
-                                        key={index}
-                                        style={[styles.suggestionItem, { cursor: 'pointer' }]}
-                                        onPress={() => {
-                                            setSuggestions([]);
-                                            setIsSearchFocused(false);
-                                            handleSearch(item);
-                                        }}
-                                    >
-                                        <MaterialIcons name="search" size={18} color={theme.iconInactive} style={{ marginRight: 12 }} />
-                                        <Text style={styles.suggestionText}>{item}</Text>
-                                        <MaterialIcons name="north-west" size={16} color={theme.iconInactive} style={{ marginLeft: 'auto' }} />
-                                    </TouchableOpacity>
-                                ))}
+                            <View style={styles.suggestionsContainer}>
+                                {suggestions.map((item, index) => {
+                                    const isHistory = recentSearches.includes(item);
+                                    return (
+                                        <SuggestionRow
+                                            key={index}
+                                            item={item}
+                                            isHistory={isHistory}
+                                            renderText={() => renderSuggestionText(item)}
+                                            theme={theme}
+                                            styles={styles}
+                                            onPress={() => handleSearch(item)}
+                                        />
+                                    );
+                                })}
+                                {/* Footer */}
+                                <View style={styles.suggestionFooter}>
+                                    <Text style={styles.suggestionFooterText}>Arama tahminlerini bildirme</Text>
+                                </View>
                             </View>
                         )}
                     </View>
@@ -403,19 +457,46 @@ const createStyles = (theme) => StyleSheet.create({
         justifyContent: 'center', alignItems: 'center'
     },
     suggestionsContainer: {
-        position: 'absolute', top: 60, left: 16, right: 16,
-        backgroundColor: theme.card, borderRadius: 16,
-        paddingVertical: 8,
-        shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1, shadowRadius: 12, elevation: 5,
-        borderWidth: 1, borderColor: theme.border,
-        zIndex: 20
+        position: 'absolute',
+        top: 62,
+        left: 0,
+        right: 0,
+        backgroundColor: theme.isDark ? '#212121' : '#fff',
+        borderRadius: 12,
+        paddingVertical: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: theme.isDark ? 0.5 : 0.18,
+        shadowRadius: 20,
+        elevation: 12,
+        borderWidth: 1,
+        borderColor: theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.1)',
+        zIndex: 9999,
+        overflow: 'hidden',
     },
     suggestionItem: {
-        flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 10,
     },
     suggestionText: {
-        fontSize: 15, color: theme.text, fontWeight: '500'
+        fontSize: 15,
+        color: theme.text,
+        fontWeight: '400',
+        flex: 1,
+    },
+    suggestionFooter: {
+        borderTopWidth: 1,
+        borderTopColor: theme.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        alignItems: 'flex-end',
+    },
+    suggestionFooterText: {
+        fontSize: 11,
+        color: theme.iconInactive,
+        fontStyle: 'italic',
     },
     scrollContent: { flexGrow: 1, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
     recentSection: { marginBottom: 32 },

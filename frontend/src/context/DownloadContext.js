@@ -46,15 +46,17 @@ export const DownloadProvider = ({ children }) => {
     };
 
     const cancelDownload = async (videoId) => {
+        // Immediately remove from UI (optimistic update) so bar disappears instantly
+        setActiveDownloads(prev => {
+            const updated = { ...prev };
+            delete updated[videoId];
+            return updated;
+        });
+        // Signal backend to stop the download
         try {
             await api.cancelDownload(videoId);
-            setActiveDownloads(prev => {
-                const updated = { ...prev };
-                delete updated[videoId];
-                return updated;
-            });
         } catch (e) {
-            console.error("Failed to cancel download", e);
+            console.error('Failed to signal cancel to backend', e);
         }
     };
 
