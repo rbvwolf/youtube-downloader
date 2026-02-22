@@ -11,11 +11,10 @@ import re
 app = FastAPI(title="Youtube-Downloader API")
 
 # Frontend (React Native) ile haberleşebilmek için CORS ayarları
-# NOT: allow_credentials=True ile allow_origins=["*"] birlikte kullanılamaz (CORS spec).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origin_regex=".*",  # allow_origins=["*"] ile allow_credentials=True çakıştığından regex kullanıldı
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -102,7 +101,8 @@ async def get_info(video_id: str):
     """
     url = f"https://www.youtube.com/watch?v={video_id}"
     ydl_opts = {
-        'quiet': True,
+        'cookiefile': 'cookies.txt',
+        'js_runtimes': {'node': {}},
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -117,13 +117,16 @@ async def get_info(video_id: str):
             
             formats = info.get('formats', [])
             
-            def get_size(height=None, is_audio=False):
+            def get_size(height=None, is_audio=False, ext=None):
                 best_size = 0
                 for f in formats:
                     size = f.get('filesize') or f.get('filesize_approx') or 0
                     if is_audio:
                         if f.get('vcodec') == 'none' and f.get('acodec') != 'none':
-                            if size > best_size: best_size = size
+                            if ext:
+                                if f.get('ext') == ext and size > best_size: best_size = size
+                            else:
+                                if size > best_size: best_size = size
                     else:
                         if f.get('height') == height and f.get('vcodec') != 'none':
                             # Just video stream size, yt-dlp merges video+audio so true size is video+audio
@@ -132,6 +135,8 @@ async def get_info(video_id: str):
                 return best_size
 
             audio_size = get_size(is_audio=True)
+            m4a_size = get_size(is_audio=True, ext='m4a')
+            webm_size = get_size(is_audio=True, ext='webm')
             
             def format_mb(video_bytes):
                 # Approximation: video size + audio size
@@ -142,16 +147,44 @@ async def get_info(video_id: str):
                 return f"{total / (1024 * 1024):.1f} MB"
 
             qualities = [
-                {"quality": "audio", "label": "Audio Only (MP3)", "size": format_mb(0)},
+                {"quality": "audio", "label": "Audio Only (MP3)", "size": format_mb(0)}
+            ]
+            
+            if m4a_size > 0:
+                qualities.append({"quality": "audio_m4a", "label": "Audio Only (M4A)", "size": f"{m4a_size / (1024 * 1024):.1f} MB"})
+            if webm_size > 0:
+                qualities.append({"quality": "audio_webm", "label": "Audio Only (WebM)", "size": f"{webm_size / (1024 * 1024):.1f} MB"})
+
+            qualities.extend([
                 {"quality": "1080p", "label": "Full HD (1080p)", "size": format_mb(get_size(1080))},
                 {"quality": "720p", "label": "HD (720p)", "size": format_mb(get_size(720))},
                 {"quality": "480p", "label": "Standard (480p)", "size": format_mb(get_size(480))},
-            ]
+            ])
             
             return {
                 "details": details,
                 "qualities": qualities
             }
+    except yt_dlp.utils.DownloadError as e:
+        error_msg = str(e)
+        if 'Sign in to confirm' in error_msg or 'bot' in error_msg.lower():
+            return {
+                "details": {
+                    "id": video_id,
+                    "title": "Video Bilgisi Alınamadı (Bot Koruması)",
+                    "thumbnail": "https://via.placeholder.com/320x180?text=Bot+Protection",
+                    "duration": 0
+                },
+                "qualities": [
+                    {"quality": "audio", "label": "Audio Only (MP3)", "size": "-- MB"},
+                    {"quality": "audio_m4a", "label": "Audio Only (M4A)", "size": "-- MB"},
+                    {"quality": "audio_webm", "label": "Audio Only (WebM)", "size": "-- MB"},
+                    {"quality": "1080p", "label": "Full HD (1080p)", "size": "-- MB"},
+                    {"quality": "720p", "label": "HD (720p)", "size": "-- MB"},
+                    {"quality": "480p", "label": "Standard (480p)", "size": "-- MB"},
+                ]
+            }
+        raise HTTPException(status_code=500, detail=error_msg)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -165,18 +198,9 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
     os.makedirs(actual_dir, exist_ok=True)
     
     ydl_opts: dict = {
-        'quiet': False,
-        'noplaylist': True,
-        'retries': 10,
-        'fragment_retries': 10,
-        # Bot koruma bypass — cookies.txt dosyasından çerez oku
-        'cookiefile': os.path.join(os.path.dirname(__file__), 'cookies.txt'),
-        # Anti-throttling: Android client ile web bot kısıtını aşma
-        'extractor_args': {'youtube': ['player_client=android', 'player_skip=web']},
-        # Ağ stabilitesi
-        'socket_timeout': 30,
-        'nocheckcertificate': True,
-        'legacyserverconnect': True,
+        'cookiefile': 'cookies.txt',
+        'js_runtimes': {'node': {}},
+        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
     }
 
     progress_file = os.path.join(DOWNLOAD_DIR, f"{video_id}_progress.json")
@@ -249,35 +273,35 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
     # yt-dlp 2023+ allows python dicts. We will just use the standard template, but clean up the title using the 'replace' or 'autonumber' no, just use a custom outtmpl class or postprocessor.
     # Actually, the easiest way is to let yt-dlp download, but since we define outtmpl:
     
-    if quality == 'audio':
-        # Sadece ses modunda mp3'e çevirme işlemi (FFmpeg kullanır)
+    if quality.startswith('audio'):
         ydl_opts['outtmpl'] = os.path.join(actual_dir, '%(title)s.%(ext)s')
-        ydl_opts['format'] = 'bestaudio/best'
-        ydl_opts['postprocessors'] = [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }, {
-            # Strip .mpg and other unwanted extensions from the final filename
-            'key': 'Exec',
-            'exec_cmd': 'python -c "import os, sys; p = sys.argv[1]; d, f = os.path.split(p); f_new = f.replace(\'.mpg.mp3\', \'.mp3\').replace(\'.mp4.mp3\', \'.mp3\'); os.rename(p, os.path.join(d, f_new)) if f != f_new else None"',
-            'when': 'post_process'
-        }]
+        
+        if quality == 'audio_m4a':
+            ydl_opts['format'] = 'bestaudio[ext=m4a]/bestaudio/best'
+            ydl_opts['postprocessors'] = [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'm4a',
+                'preferredquality': '192',
+            }]
+        elif quality == 'audio_webm':
+            ydl_opts['format'] = 'bestaudio[ext=webm]/bestaudio/best'
+        else:
+            ydl_opts['format'] = 'bestaudio/best'
+            ydl_opts['postprocessors'] = [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }, {
+                'key': 'Exec',
+                'exec_cmd': 'python -c "import os, sys; p = sys.argv[1]; d, f = os.path.split(p); f_new = f.replace(\'.mpg.mp3\', \'.mp3\').replace(\'.mp4.mp3\', \'.mp3\'); os.rename(p, os.path.join(d, f_new)) if f != f_new else None"',
+                'when': 'post_process'
+            }]
     else:
         # User requested: "Başlık 1080p.mp4"
         ydl_opts['outtmpl'] = os.path.join(actual_dir, f'%(title)s {quality}.%(ext)s')
         
-        # Mobil Uyumlu Codec (Çok Kritik): Sadece H.264 (AVC) indirsin. Formatı şu şekilde yap: 
-        # 'format': 'bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/best[ext=mp4]/best'
-        # To respect the user's height restriction, we append height condition:
-        height = quality.replace('p', '')
-        ydl_opts['format'] = (
-            f'bestvideo[height<={height}][ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]'
-            f'/bestvideo[height<={height}][ext=mp4]+bestaudio[ext=m4a]'
-            f'/bestvideo[height<={height}]+bestaudio'
-            f'/best[height<={height}][ext=mp4]'
-            f'/best[height<={height}]'
-        )
+        # Geri Dönüş: Katı Standart Format
+        ydl_opts['format'] = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
         ydl_opts['merge_output_format'] = 'mp4'
         ydl_opts['postprocessors'] = [{
             'key': 'Exec',
@@ -289,6 +313,19 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
         active_downloads[video_id] = True
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
+    except yt_dlp.utils.DownloadError as e:
+        error_msg = str(e)
+        if 'Sign in to confirm' in error_msg or 'bot' in error_msg.lower():
+            print(f"[Bot Koruması] {video_id}: YouTube IP banı veya JS challenge çözülemedi.")
+            try:
+                import json
+                with open(progress_file, 'w') as f:
+                    json.dump({"error": "YouTube Bot Koruması Devrede. Lütfen IP değiştirin veya 5 dk bekleyin", "formats": []}, f)
+            except: pass
+            return
+        
+        is_cancelled = 'CANCELLED' in str(e)
+        print(f"{'İptal edildi' if is_cancelled else 'İndirme başarısız'} {video_id}: {e}")
     except Exception as e:
         is_cancelled = 'CANCELLED' in str(e)
         print(f"{'İptal edildi' if is_cancelled else 'İndirme başarısız'} {video_id}: {e}")
