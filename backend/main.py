@@ -103,6 +103,8 @@ async def get_info(video_id: str):
     ydl_opts = {
         'cookiefile': 'cookies.txt',
         'js_runtimes': {'node': {}},
+        'nocheckcertificate': True,
+        'youtube_include_dash_manifest': False,
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -201,6 +203,11 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
         'cookiefile': 'cookies.txt',
         'js_runtimes': {'node': {}},
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+        'concurrent_fragment_downloads': 5,
+        'buffersize': 1048576,
+        'http_chunk_size': 10485760,
+        'nocheckcertificate': True,
+        'youtube_include_dash_manifest': False,
     }
 
     progress_file = os.path.join(DOWNLOAD_DIR, f"{video_id}_progress.json")
