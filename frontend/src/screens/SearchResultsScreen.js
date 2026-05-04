@@ -62,6 +62,7 @@ export default function SearchResultsScreen({ route, navigation }) {
             }
         } catch (error) {
             console.error(error);
+            showToast('Arama sonuçları alınamadı. Bağlantını kontrol et.', 'error');
         } finally {
             setLoading(false);
         }
@@ -76,11 +77,11 @@ export default function SearchResultsScreen({ route, navigation }) {
             if (data && data.qualities) {
                 setVideoFormats(data.qualities);
             } else {
-                showToast("Format details could not be found", "error");
+                showToast('Video kalite bilgisi alınamadı.', 'error');
             }
         } catch (error) {
-            console.error("Info fetch failed:", error);
-            showToast("Failed to fetch video formats", "error");
+            console.error('Info fetch failed:', error);
+            showToast('Video bilgileri alınamadı. Lütfen tekrar deneyin.', 'error');
             setModalVisible(false);
         } finally {
             setFetchingInfo(false);
@@ -89,26 +90,27 @@ export default function SearchResultsScreen({ route, navigation }) {
 
     const handleQuickDownload = async (video, quality) => {
         setModalVisible(false);
-        showToast(`Starting ${quality === 'audio' ? 'MP3' : 'MP4'} download...`, "info");
+        const label = quality === 'audio' ? 'MP3 sesi' : `${quality} video`;
+        showToast(`${label} indirme baslatildi.`, 'info');
         try {
             await api.downloadVideo(video.id, quality, downloadPath);
-            showToast(t('downloadSuccess'), "success");
+            showToast(t('downloadSuccess'), 'success');
             startSimulation(video, quality);
         } catch (error) {
-            console.error("Quick Download Error:", error);
-            showToast(t('downloadError'), "error");
+            console.error('Quick Download Error:', error);
+            showToast('Indirme baslatılamadı. Backend çalışıyor mu?', 'error');
         }
     };
 
     const startVoiceSearch = () => {
         if (Platform.OS !== 'web') {
-            showToast('Voice search is only supported on web currently.', 'error');
+            showToast('Sesli arama su an sadece web uygulamasında destekleniyor.', 'info');
             return;
         }
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            showToast('Voice search is not supported in your browser.', 'error');
+            showToast('Tarayıcın sesli aramayı desteklemiyor. Chrome veya Edge kullan.', 'error');
             return;
         }
 
@@ -138,11 +140,11 @@ export default function SearchResultsScreen({ route, navigation }) {
         };
 
         recognition.onerror = (e) => {
-            console.error("Voice Error", e);
+            console.error('Voice Error', e);
             if (e.error === 'not-allowed') {
-                showToast(t('micDenied'), "error");
+                showToast(t('micDenied'), 'error');
             } else {
-                showToast("Voice search error: " + e.error, "error");
+                showToast('Sesli arama hatasi: ' + e.error, 'error');
             }
             setVoiceSearchVisible(false);
         };

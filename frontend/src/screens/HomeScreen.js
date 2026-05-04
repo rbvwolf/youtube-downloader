@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ImageBackground, StatusBar, SafeAreaView, StyleSheet, Platform, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ImageBackground, StatusBar, SafeAreaView, StyleSheet, Platform, ActivityIndicator, AppState } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import api from '../services/Api';
@@ -63,6 +64,11 @@ export default function HomeScreen({ navigation }) {
     const [trendingVideos, setTrendingVideos] = useState([]);
     const [loadingTrending, setLoadingTrending] = useState(false);
 
+    // Clipboard algılama
+    const [clipboardUrl, setClipboardUrl] = useState(null); // Panodan algılanan YouTube URL'si
+    const lastCheckedClipboard = useRef(''); // Aynı URL için tekrar tekrar banner gösterme
+    const appStateRef = useRef(AppState.currentState);
+
     // Voice Search
     const [voiceSearchVisible, setVoiceSearchVisible] = useState(false);
     const [voiceTranscript, setVoiceTranscript] = useState('');
@@ -85,9 +91,67 @@ export default function HomeScreen({ navigation }) {
         const unsubscribe = navigation.addListener('focus', () => {
             loadRecentSearches();
             setSearchQuery(''); // reset search query when coming back
+            checkClipboard();  // Ekrana her dönüşte panoyu kontrol et
         });
         return unsubscribe;
     }, [navigation]);
+
+    // Pano (Clipboard) kontrol fonksiyonu
+    const checkClipboard = async () => {
+        try {
+            let text = '';
+            if (Platform.OS === 'web') {
+                // Web'de navigator.clipboard API'si — sadece güvenli context'te (https/localhost) çalışır
+                if (navigator?.clipboard?.readText) {
+                    text = await navigator.clipboard.readText();
+                }
+            } else {
+                text = await Clipboard.getStringAsync();
+            }
+
+            if (!text) return;
+
+            // YouTube URL kontrolü
+            const isYouTubeUrl = /(?:youtube\.com\/watch\?v=|youtu\.be\/)[\w-]+/.test(text);
+            if (isYouTubeUrl && text !== lastCheckedClipboard.current) {
+                lastCheckedClipboard.current = text;
+                setClipboardUrl(text.trim());
+            }
+        } catch (e) {
+            // Clipboard okuma izni verilmemişse sessizce geç
+            console.log('[Clipboard] Okunamadı:', e.message);
+        }
+    };
+
+    // AppState dinleyicisi: uygulama arka plandan öne gelince panoyu kontrol et
+    useEffect(() => {
+        checkClipboard(); // İlk açılışta da kontrol et
+
+        const subscription = AppState.addEventListener('change', (nextState) => {
+            if (appStateRef.current.match(/inactive|background/) && nextState === 'active') {
+                checkClipboard();
+            }
+            appStateRef.current = nextState;
+        });
+
+        return () => subscription?.remove();
+    }, []);
+
+    // Panodaki URL'yi video ID'ye çevir ve kalite modalını aç
+    const handleClipboardDownload = async () => {
+        if (!clipboardUrl) return;
+        const match = clipboardUrl.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([-\w]+)/);
+        const videoId = match ? match[1] : null;
+        if (!videoId) {
+            showToast('Geçerli bir YouTube linki bulunamadı.', 'error');
+            setClipboardUrl(null);
+            return;
+        }
+        // Minimal bir video objesi oluştur, fetchVideoInfo zaten bilgileri çekecek
+        const tempVideo = { id: videoId, title: 'Yükleniyor...', thumbnail: '', channel: '' };
+        setClipboardUrl(null);
+        fetchVideoInfo(tempVideo);
+    };
 
     useEffect(() => {
         const fetchSuggestions = async () => {
@@ -243,14 +307,15 @@ export default function HomeScreen({ navigation }) {
     };
 
     const handleQuickDownload = async (video, quality) => {
-        showToast(`Starting ${quality === 'audio' ? 'MP3' : 'MP4'} download...`, "info");
+        const label = quality === 'audio' ? 'MP3 sesi' : `${quality} video`;
+        showToast(`${label} indirme baslatildi.`, 'info');
         try {
             await api.downloadVideo(video.id, quality, downloadPath);
-            showToast(t('downloadSuccess'), "success");
+            showToast(t('downloadSuccess'), 'success');
             startSimulation(video, quality);
         } catch (error) {
-            console.error("Quick Download Error:", error);
-            showToast(t('downloadError'), "error");
+            console.error('Quick Download Error:', error);
+            showToast('Indirme baslatılamadı. Backend çalışıyor mu?', 'error');
         }
     };
 
@@ -261,13 +326,20 @@ export default function HomeScreen({ navigation }) {
         try {
             const data = await api.getVideoInfo(video.id);
             if (data && data.qualities) {
+                // Gerçek bilgileri modal'a güncelle
+                setSelectedVideo(prev => ({
+                    ...prev,
+                    title: data.details?.title || prev.title,
+                    thumbnail: data.details?.thumbnail || prev.thumbnail,
+                    duration: data.details?.duration || prev.duration,
+                }));
                 setVideoFormats(data.qualities);
             } else {
-                showToast("Format details could not be found", "error");
+                showToast('Video kalite bilgisi alınamadı.', 'error');
             }
         } catch (error) {
-            console.error("Info fetch failed:", error);
-            showToast("Failed to fetch video formats", "error");
+            console.error('Info fetch failed:', error);
+            showToast('Video bilgileri alınamadı. Lütfen tekrar deneyin.', 'error');
             setQualityModalVisible(false);
         } finally {
             setFetchingInfo(false);
@@ -346,6 +418,28 @@ export default function HomeScreen({ navigation }) {
                             </View>
                         )}
                     </View>
+
+                    {/* Clipboard Banner */}
+                    {clipboardUrl && (
+                        <View style={styles.clipboardBanner}>
+                            <MaterialIcons name="link" size={18} color={theme.primary} style={{ marginRight: 8 }} />
+                            <Text style={styles.clipboardBannerText} numberOfLines={1}>
+                                Panoda YouTube linki var
+                            </Text>
+                            <TouchableOpacity
+                                style={[styles.clipboardBtn, { cursor: 'pointer' }]}
+                                onPress={handleClipboardDownload}
+                            >
+                                <Text style={styles.clipboardBtnText}>Indir</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={{ padding: 4, cursor: 'pointer' }}
+                                onPress={() => setClipboardUrl(null)}
+                            >
+                                <MaterialIcons name="close" size={18} color={theme.iconInactive} />
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </View>
 
                 <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -444,7 +538,7 @@ const createStyles = (theme) => StyleSheet.create({
         overflow: 'visible',
     },
     searchHeaderContainer: {
-        paddingHorizontal: 16, paddingTop: 16, paddingBottom: 16,
+        paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8,
         backgroundColor: theme.headerBackground,
         zIndex: 9999,
         elevation: 10,
@@ -463,6 +557,36 @@ const createStyles = (theme) => StyleSheet.create({
     micButton: {
         width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primaryBg,
         justifyContent: 'center', alignItems: 'center'
+    },
+    // Clipboard banner — arama barının hemen altında gösterilir
+    clipboardBanner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 10,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        backgroundColor: theme.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: theme.primary + '40',
+    },
+    clipboardBannerText: {
+        flex: 1,
+        fontSize: 13,
+        color: theme.subText,
+        fontWeight: '500',
+    },
+    clipboardBtn: {
+        paddingHorizontal: 14,
+        paddingVertical: 6,
+        backgroundColor: theme.primary,
+        borderRadius: 20,
+        marginRight: 8,
+    },
+    clipboardBtnText: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#fff',
     },
     suggestionsContainer: {
         position: 'absolute',
