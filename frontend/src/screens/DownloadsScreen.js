@@ -9,7 +9,7 @@ import { useToast } from '../context/ToastContext';
 export default function DownloadsScreen() {
     const { theme, t } = useTheme();
     const styles = useMemo(() => createStyles(theme), [theme]);
-    const { activeDownloads, completedDownloads, downloadPath, startSimulation, clearHistory, cancelDownload } = useDownloads();
+    const { activeDownloads, completedDownloads, downloadPath, startSimulation, clearHistory, cancelDownload, removeDownload } = useDownloads();
     const { showToast } = useToast();
 
     const [filter, setFilter] = useState('All'); // 'All', 'Active', 'Completed'
@@ -31,9 +31,16 @@ export default function DownloadsScreen() {
                 <View style={styles.header}>
                     <View style={styles.rowBetween}>
                         <Text style={styles.headerTitle}>{t('downloadsTitle')}</Text>
-                        <TouchableOpacity style={[styles.iconBtn, { cursor: 'pointer' }]} onPress={() => { clearHistory(); showToast('History cleared', 'success'); }}>
-                            <MaterialIcons name="delete-outline" size={24} color={theme.text} />
-                        </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.iconBtn, { cursor: 'pointer' }]}
+                        onPress={async () => {
+                            if (completedDownloads.length === 0) return;
+                            await clearHistory();
+                            showToast('Tum gecmis temizlendi.', 'success');
+                        }}
+                    >
+                        <MaterialIcons name="delete-outline" size={24} color={theme.text} />
+                    </TouchableOpacity>
                     </View>
 
                     <View style={{ height: 40, marginTop: 16 }}>
@@ -112,7 +119,22 @@ export default function DownloadsScreen() {
                                         <View style={styles.cardInfo}>
                                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                                 <Text style={[styles.cardTitle, { flex: 1, marginRight: 8 }]} numberOfLines={2}>{video.title}</Text>
-                                                <MaterialIcons name="more-vert" size={20} color={theme.iconInactive} />
+                                                {/* Tamamlanmis kaydi sil */}
+                                                {!item.isActive && (
+                                                    <TouchableOpacity
+                                                        style={{ padding: 4, cursor: 'pointer' }}
+                                                        onPress={async () => {
+                                                            await removeDownload(video.id, item.quality);
+                                                            showToast('Kayit silindi.', 'success');
+                                                        }}
+                                                        accessibilityLabel="Kaydi sil"
+                                                    >
+                                                        <MaterialIcons name="delete-outline" size={20} color={theme.danger || '#f44336'} />
+                                                    </TouchableOpacity>
+                                                )}
+                                                {item.isActive && (
+                                                    <MaterialIcons name="more-vert" size={20} color={theme.iconInactive} />
+                                                )}
                                             </View>
 
                                             {item.isActive ? (
