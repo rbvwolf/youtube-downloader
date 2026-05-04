@@ -1,4 +1,4 @@
 {
-    "python.defaultInterpreterPath": "r:\\Code\\youtube-downloader\\venv\\Scripts\\python.exe",
+    "python.defaultInterpreterPath": "R:\\Code\\youtube-downloader\\venv\\Scripts\\python.exe",
     "python.terminal.activateEnvironment": true
 }

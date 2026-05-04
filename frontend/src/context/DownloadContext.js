@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 import api from '../services/Api';
 
 const DownloadContext = createContext();
@@ -104,6 +105,26 @@ export const DownloadProvider = ({ children }) => {
             if (data.completed === true && data.filename) {
                 clearInterval(intervalsRef.current[video.id]);
                 delete intervalsRef.current[video.id];
+
+                // Web'de: backend'in /downloads/ static endpoint'i üzerinden
+                // dosyayı kullanıcının tarayıcısına indirt.
+                if (Platform.OS === 'web' && typeof document !== 'undefined') {
+                    try {
+                        const filename = data.filename.replace(/\\/g, '/').split('/').pop();
+                        const downloadUrl = `${api.getBaseURL()}/downloads/${encodeURIComponent(filename)}`;
+                        const link = document.createElement('a');
+                        link.href = downloadUrl;
+                        link.download = filename;
+                        link.style.display = 'none';
+                        document.body.appendChild(link);
+                        link.click();
+                        setTimeout(() => document.body.removeChild(link), 2000);
+                        console.log('[Download] Tarayıcı indirmesi başlatıldı:', downloadUrl);
+                    } catch (e) {
+                        console.error('[Download] Web indirme tetiklenemedi:', e);
+                    }
+                }
+
                 setTimeout(() => {
                     setActiveDownloads(prev => {
                         const copy = { ...prev };

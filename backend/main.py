@@ -7,6 +7,8 @@ from typing import Optional
 import yt_dlp
 import os
 import re
+import shutil
+import subprocess
 
 app = FastAPI(title="Youtube-Downloader API")
 
@@ -20,11 +22,37 @@ app.add_middleware(
 )
 
 # İstek doğrultusunda videoların kaydedileceği dizin
-DOWNLOAD_DIR = r"R:\Code\Youtube-Downloader-Downloads"
+# Dinamik: backend'in çalıştığı klasörün altında 'downloads/' oluşturulur.
+# Ortam değişkeni ile override edilebilir: DOWNLOAD_DIR=/custom/path
+DOWNLOAD_DIR = os.environ.get("DOWNLOAD_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads"))
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
 # Frontend'in indirilen dosyalara doğrudan erişebilmesi için StaticFiles tanımlaması
 app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
+
+
+def check_ffmpeg():
+    """Sistemde FFmpeg kurulu olup olmadığını kontrol eder."""
+    if shutil.which("ffmpeg") is None:
+        print("\n" + "="*60)
+        print("⚠️  UYARI: FFmpeg bulunamadı!")
+        print("   FFmpeg olmadan 1080p/720p video indirmeleri")
+        print("   (video+ses birleştirme) başarısız olacaktır.")
+        print("   Kurulum: https://ffmpeg.org/download.html")
+        print("   Windows: winget install ffmpeg")
+        print("   Linux:   sudo apt install ffmpeg")
+        print("   macOS:   brew install ffmpeg")
+        print("="*60 + "\n")
+    else:
+        try:
+            result = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, timeout=5)
+            version_line = result.stdout.split("\n")[0] if result.stdout else "unknown version"
+            print(f"✅ FFmpeg bulundu: {version_line}")
+        except Exception:
+            print("✅ FFmpeg bulundu.")
+
+check_ffmpeg()
+print(f"📁 İndirme dizini: {DOWNLOAD_DIR}")
 
 
 class DownloadRequest(BaseModel):
@@ -203,9 +231,8 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
         'cookiefile': 'cookies.txt',
         'js_runtimes': {'node': {}},
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-        'concurrent_fragment_downloads': 5,
-        'buffersize': 1048576,
-        'http_chunk_size': 10485760,
+        'concurrent_fragment_downloads': 10,  # 25-30 Mbps hedef hız için artırıldı
+        'buffersize': 1024 * 64,               # 64KB buffer — daha akıcı yazma
         'nocheckcertificate': True,
         'youtube_include_dash_manifest': False,
     }

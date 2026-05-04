@@ -175,13 +175,15 @@ export default function HomeScreen({ navigation }) {
 
     const startVoiceSearch = () => {
         if (Platform.OS !== 'web') {
-            showToast('Voice search is only supported on web currently.', 'error');
+            // TODO: Mobil için @react-native-voice/voice entegrasyonu yapılacak.
+            // Şu an sadece web'de destekleniyor.
+            showToast('🎤 Sesli arama şu an sadece web uygulamasında destekleniyor.', 'info');
             return;
         }
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            showToast('Voice search is not supported in your browser.', 'error');
+            showToast('Tarayıcın sesli aramayı desteklemiyor. Chrome veya Edge kullan.', 'error');
             return;
         }
 

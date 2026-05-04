@@ -1,8 +1,26 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
 
-// Backend IP Adresinizi buraya girin. Eğer emulator kullanıyorsanız 10.0.2.2 olabilir.
-const BASE_URL = 'http://127.0.0.1:8000';
+// Backend URL — web ortamında tarayıcının adresi otomatik algılanır.
+// Farklı bir cihazdan (telefon, LAN) erişimde bile çalışır.
+function resolveBaseURL() {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const host = window.location.hostname;
+        const port = 8000;
+        // localhost veya loopback => her zaman 127.0.0.1
+        if (host === 'localhost' || host === '127.0.0.1' || host === '') {
+            return `http://127.0.0.1:${port}`;
+        }
+        // Farklı bir IP/hostname (LAN, tünel vb.) => aynı host, backend portu
+        return `http://${host}:${port}`;
+    }
+    // Native (Android/iOS) için varsayılan
+    // Android emulatör: 10.0.2.2, gerçek cihaz: lokal IP yaz
+    return 'http://127.0.0.1:8000';
+}
+
+const BASE_URL = resolveBaseURL();
+console.log('[Api] BASE_URL =>', BASE_URL);
 
 const api = axios.create({
     baseURL: BASE_URL,
@@ -149,5 +167,8 @@ export default {
             console.error("Cancel API Error:", error);
             throw error;
         }
-    }
+    },
+
+    // Tarayıcı indirme URL'si oluşturmak için kullanılır (DownloadContext)
+    getBaseURL: () => BASE_URL,
 };
