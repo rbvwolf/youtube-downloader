@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, StyleSheet, Platform } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, SafeAreaView, StyleSheet, Platform, Modal } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
@@ -15,30 +15,41 @@ export default function SettingsScreen() {
     const { clearRecentSearches } = useSearchHistory();
     const styles = useMemo(() => createStyles(theme), [theme]);
 
+    const [pathModalVisible, setPathModalVisible] = useState(false);
+    const [pathInputValue, setPathInputValue] = useState('');
+
     const handlePickDirectory = async () => {
         if (Platform.OS === 'web') {
-            try {
-                const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-                showToast(`"${dirHandle.name}" klasörü seçildi. Backend'in bu dizine erişebildiğinden emin olun.`, 'info');
-            } catch (err) {
-                if (err.name !== 'AbortError') {
-                    showToast('Klasör seçimi başarısız. Tarayıcınız desteklemiyor olabilir.', 'error');
-                }
-            }
+            // Web'de tarayici API'si (showDirectoryPicker) HTTPS gerektiriyor ve
+            // backend'in anlayacagi bir path donmuyor. Kullanicinin path'i manuel
+            // girmesi en guvenilir cozum.
+            setPathInputValue(downloadPath || '');
+            setPathModalVisible(true);
         } else if (Platform.OS === 'android') {
             try {
                 const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
                 if (permissions.granted) {
                     await updateDownloadPath(permissions.directoryUri);
-                    showToast('İndirme klasörü güncellendi.', 'success');
+                    showToast('Indirme klasoru guncellendi.', 'success');
                 }
             } catch (err) {
                 console.error('Failed to pick directory', err);
-                showToast('Klasör seçimi başarısız.', 'error');
+                showToast('Klasor secimi basarisiz.', 'error');
             }
         } else {
-            showToast('Bu platformda klasör seçici desteklenmiyor.', 'info');
+            showToast('Bu platformda klasor secici desteklenmiyor.', 'info');
         }
+    };
+
+    const handleSavePath = async () => {
+        const trimmed = pathInputValue.trim();
+        if (!trimmed) {
+            showToast('Lutfen gecerli bir yol girin.', 'error');
+            return;
+        }
+        await updateDownloadPath(trimmed);
+        setPathModalVisible(false);
+        showToast('Indirme klasoru kaydedildi.', 'success');
     };
 
     return (
@@ -183,6 +194,55 @@ export default function SettingsScreen() {
             </View>
 
         </SafeAreaView>
+
+        {/* Web klasor yolu gircisi modal */}
+        <Modal
+            visible={pathModalVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setPathModalVisible(false)}
+        >
+            <View style={styles.modalOverlay}>
+                <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                    <Text style={[styles.modalTitle, { color: theme.text }]}>Indirme Klasoru</Text>
+                    <Text style={[styles.modalSubtitle, { color: theme.subText }]}>
+                        Backend'in erisebilecegi tam klasor yolunu girin.{'
+'}
+                        Ornek: C:\Users\karay\Downloads
+                    </Text>
+                    <TextInput
+                        style={[
+                            styles.textInput,
+                            {
+                                color: theme.text,
+                                borderColor: theme.border,
+                                backgroundColor: theme.searchBackground,
+                            }
+                        ]}
+                        value={pathInputValue}
+                        onChangeText={setPathInputValue}
+                        placeholder="Ornek: C:\Users\karay\Downloads"
+                        placeholderTextColor={theme.iconInactive}
+                        autoFocus
+                        onSubmitEditing={handleSavePath}
+                    />
+                    <View style={styles.modalActions}>
+                        <TouchableOpacity
+                            style={[styles.modalBtn, { backgroundColor: theme.chipInactiveBg, cursor: 'pointer' }]}
+                            onPress={() => setPathModalVisible(false)}
+                        >
+                            <Text style={[styles.modalBtnText, { color: theme.subText }]}>Iptal</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.modalBtn, { backgroundColor: theme.primary, cursor: 'pointer' }]}
+                            onPress={handleSavePath}
+                        >
+                            <Text style={[styles.modalBtnText, { color: '#fff' }]}>Kaydet</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </Modal>
     );
 }
 

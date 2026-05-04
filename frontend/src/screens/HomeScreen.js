@@ -10,6 +10,7 @@ import { useDownloads } from '../context/DownloadContext';
 import { useSearchHistory } from '../context/SearchContext';
 import VideoCard from '../components/VideoCard';
 import VoiceSearchOverlay from '../components/VoiceSearchOverlay';
+import VoiceSearchModal from '../components/VoiceSearchModal';
 import QualitySelectionModal from '../components/QualitySelectionModal';
 import VideoPreviewModal from '../components/VideoPreviewModal';
 
@@ -69,10 +70,13 @@ export default function HomeScreen({ navigation }) {
     const lastCheckedClipboard = useRef(''); // Aynı URL için tekrar tekrar banner gösterme
     const appStateRef = useRef(AppState.currentState);
 
-    // Voice Search
+    // Voice Search (web)
     const [voiceSearchVisible, setVoiceSearchVisible] = useState(false);
     const [voiceTranscript, setVoiceTranscript] = useState('');
     const recognitionRef = React.useRef(null);
+
+    // Voice Search (mobil native)
+    const [nativeVoiceVisible, setNativeVoiceVisible] = useState(false);
 
     // Quality Modal
     const [qualityModalVisible, setQualityModalVisible] = useState(false);
@@ -238,27 +242,26 @@ export default function HomeScreen({ navigation }) {
     };
 
     const startVoiceSearch = () => {
+        // --- Mobil: @react-native-voice/voice ile yerel ses tanima ---
         if (Platform.OS !== 'web') {
-            // TODO: Mobil için @react-native-voice/voice entegrasyonu yapılacak.
-            // Şu an sadece web'de destekleniyor.
-            showToast('🎤 Sesli arama şu an sadece web uygulamasında destekleniyor.', 'info');
+            setNativeVoiceVisible(true);
             return;
         }
 
+        // --- Web: tarayici SpeechRecognition API ---
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            showToast('Tarayıcın sesli aramayı desteklemiyor. Chrome veya Edge kullan.', 'error');
+            showToast('Tarayicin sesli aramayı desteklemiyor. Chrome veya Edge kullan.', 'error');
             return;
         }
 
         const recognition = new SpeechRecognition();
         recognitionRef.current = recognition;
-        recognition.lang = 'en-US'; // Or map based on language pref
+        recognition.lang = 'tr-TR';
         recognition.interimResults = true;
 
         recognition.onstart = () => {
             setVoiceTranscript('');
-            // Optional: You could update an inner state here, but visibility is handled synchronously below
         };
 
         recognition.onresult = (event) => {
@@ -278,23 +281,22 @@ export default function HomeScreen({ navigation }) {
         };
 
         recognition.onerror = (e) => {
-            console.error("Voice Error", e);
+            console.error('Voice Error', e);
             if (e.error === 'not-allowed') {
-                showToast(t('micDenied'), "error");
+                showToast(t('micDenied'), 'error');
             } else {
-                showToast("Voice search error: " + e.error, "error");
+                showToast('Sesli arama hatasi: ' + e.error, 'error');
             }
             setVoiceSearchVisible(false);
         };
         recognition.onend = () => setVoiceSearchVisible(false);
 
-        // Show visibility immediately before start to provide visual feedback instantly
         setVoiceSearchVisible(true);
         try {
             recognition.start();
         } catch (e) {
             console.error(e);
-            showToast("Failed to start voice recognition.", "error");
+            showToast('Sesli arama baslatilamıyor.', 'error');
             setVoiceSearchVisible(false);
         }
     };
@@ -526,6 +528,17 @@ export default function HomeScreen({ navigation }) {
                     fetchVideoInfo(previewVideo);
                 }}
             />
+
+            {/* Mobil sesli arama modal'i — sadece native platformlarda goruntulenir */}
+            {nativeVoiceVisible && (
+                <VoiceSearchModal
+                    onClose={() => setNativeVoiceVisible(false)}
+                    onResult={(text) => {
+                        setNativeVoiceVisible(false);
+                        handleSearch(text);
+                    }}
+                />
+            )}
         </SafeAreaView>
     );
 }

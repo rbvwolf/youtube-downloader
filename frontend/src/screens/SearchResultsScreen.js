@@ -8,6 +8,7 @@ import { useToast } from '../context/ToastContext';
 import { useDownloads } from '../context/DownloadContext';
 import VideoCard from '../components/VideoCard';
 import VoiceSearchOverlay from '../components/VoiceSearchOverlay';
+import VoiceSearchModal from '../components/VoiceSearchModal';
 import QualitySelectionModal from '../components/QualitySelectionModal';
 import VideoPreviewModal from '../components/VideoPreviewModal';
 
@@ -30,10 +31,13 @@ export default function SearchResultsScreen({ route, navigation }) {
     const [previewVideo, setPreviewVideo] = useState(null);
     const { completedDownloads, downloadPath } = useDownloads();
 
-    // Voice Search
+    // Voice Search (web)
     const [voiceSearchVisible, setVoiceSearchVisible] = useState(false);
     const [voiceTranscript, setVoiceTranscript] = useState('');
     const recognitionRef = React.useRef(null);
+
+    // Voice Search (mobil native)
+    const [nativeVoiceVisible, setNativeVoiceVisible] = useState(false);
 
     useEffect(() => {
         if (initialQuery) {
@@ -103,14 +107,16 @@ export default function SearchResultsScreen({ route, navigation }) {
     };
 
     const startVoiceSearch = () => {
+        // --- Mobil: @react-native-voice/voice ile yerel ses tanima ---
         if (Platform.OS !== 'web') {
-            showToast('Sesli arama su an sadece web uygulamasında destekleniyor.', 'info');
+            setNativeVoiceVisible(true);
             return;
         }
 
+        // --- Web: tarayici SpeechRecognition API ---
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-            showToast('Tarayıcın sesli aramayı desteklemiyor. Chrome veya Edge kullan.', 'error');
+            showToast('Tarayicin sesli aramayı desteklemiyor. Chrome veya Edge kullan.', 'error');
             return;
         }
 
@@ -224,10 +230,25 @@ export default function SearchResultsScreen({ route, navigation }) {
 
             <VoiceSearchOverlay
                 visible={voiceSearchVisible}
-                onCancel={cancelVoiceSearch}
+                onCancel={() => {
+                    if (recognitionRef.current) recognitionRef.current.stop();
+                    setVoiceSearchVisible(false);
+                }}
                 transcript={voiceTranscript}
                 theme={theme}
             />
+
+            {/* Mobil sesli arama modal'i */}
+            {nativeVoiceVisible && (
+                <VoiceSearchModal
+                    onClose={() => setNativeVoiceVisible(false)}
+                    onResult={(text) => {
+                        setNativeVoiceVisible(false);
+                        setSearchQuery(text);
+                        handleSearch(text);
+                    }}
+                />
+            )}
 
             <QualitySelectionModal
                 visible={isModalVisible}
