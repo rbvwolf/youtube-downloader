@@ -5,3 +5,12 @@ __pycache__/
 *.pyc
 backend/__pycache__/
 frontend/node_modules/
+
+
+backend/cookies.txt
+*.cookie
+.env
+
+
+memory-bank/
+*.md
