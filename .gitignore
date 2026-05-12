@@ -7,7 +7,12 @@ backend/__pycache__/
 frontend/node_modules/
 
 backend/cookies.txt
+backend/downloads/
 *.cookie
 .env
+
 memory-bank/
-*.md
+Phase*.md
+Implementation*.md
+Task*.md
+walkthrough*.md
