@@ -89,16 +89,17 @@ async def pick_directory():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/open_directory")
-async def open_directory():
+async def open_directory(path: Optional[str] = None):
     import platform
     import subprocess
+    target_dir = path if path else DOWNLOAD_DIR
     try:
         if platform.system() == "Windows":
-            os.startfile(DOWNLOAD_DIR)
+            os.startfile(target_dir)
         elif platform.system() == "Darwin":
-            subprocess.Popen(["open", DOWNLOAD_DIR])
+            subprocess.Popen(["open", target_dir])
         else:
-            subprocess.Popen(["xdg-open", DOWNLOAD_DIR])
+            subprocess.Popen(["xdg-open", target_dir])
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

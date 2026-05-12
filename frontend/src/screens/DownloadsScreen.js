@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, ImageBackground, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, SafeAreaView, ImageBackground, StyleSheet, Platform, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useDownloads } from '../context/DownloadContext';
@@ -37,7 +37,7 @@ export default function DownloadsScreen() {
                                 style={[styles.iconBtn, { cursor: 'pointer', marginRight: 8 }]}
                                 onPress={async () => {
                                     try {
-                                        await api.openDirectory();
+                                        await api.openDirectory(downloadPath);
                                     } catch (e) {
                                         showToast('Failed to open directory.', 'error');
                                     }
@@ -47,10 +47,28 @@ export default function DownloadsScreen() {
                             </TouchableOpacity>
                             <TouchableOpacity
                                 style={[styles.iconBtn, { cursor: 'pointer' }]}
-                                onPress={async () => {
+                                onPress={() => {
                                     if (completedDownloads.length === 0) return;
-                                    await clearHistory();
-                                    showToast('Tum gecmis temizlendi.', 'success');
+                                    
+                                    const confirmDelete = async () => {
+                                        await clearHistory();
+                                        showToast('Tüm geçmiş temizlendi.', 'success');
+                                    };
+                                    
+                                    if (Platform.OS === 'web') {
+                                        if (window.confirm('Tüm geçmişi silmek istediğinize emin misiniz?')) {
+                                            confirmDelete();
+                                        }
+                                    } else {
+                                        Alert.alert(
+                                            'Geçmişi Temizle',
+                                            'Tüm geçmişi silmek istediğinize emin misiniz?',
+                                            [
+                                                { text: 'İptal', style: 'cancel' },
+                                                { text: 'Sil', style: 'destructive', onPress: confirmDelete }
+                                            ]
+                                        );
+                                    }
                                 }}
                             >
                                 <MaterialIcons name="delete-outline" size={24} color={theme.text} />

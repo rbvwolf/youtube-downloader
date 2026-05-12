@@ -189,9 +189,9 @@ export default {
         }
     },
 
-    openDirectory: async () => {
+    openDirectory: async (path) => {
         try {
-            const response = await api.get('/api/open_directory');
+            const response = await api.get('/api/open_directory', { params: { path } });
             return response.data;
         } catch (error) {
             console.error("Open Directory Error:", error);
