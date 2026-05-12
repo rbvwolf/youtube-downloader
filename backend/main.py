@@ -1,17 +1,23 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator
 from typing import Optional
 import yt_dlp
 import os
 import re
 import shutil
 import subprocess
-
-app = FastAPI(title="Youtube-Downloader API")
-
 import pathlib
+
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
+limiter = Limiter(key_func=get_remote_address)
+app = FastAPI(title="Youtube-Downloader API")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS Configuration for Frontend (React Native) communication
 app.add_middleware(
@@ -77,11 +83,13 @@ def _open_picker():
     return folder_path
 
 @app.get("/api/get_download_dir")
-async def get_download_dir():
+@limiter.limit("60/minute")
+async def get_download_dir(request: Request):
     return {"path": DOWNLOAD_DIR}
 
 @app.get("/api/pick_directory")
-async def pick_directory():
+@limiter.limit("30/minute")
+async def pick_directory(request: Request):
     try:
         folder_path = await asyncio.to_thread(_open_picker)
         return {"path": folder_path}
@@ -89,10 +97,15 @@ async def pick_directory():
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/open_directory")
-async def open_directory(path: Optional[str] = None):
+@limiter.limit("30/minute")
+async def open_directory(request: Request, path: Optional[str] = None):
     import platform
     import subprocess
     target_dir = path if path else DOWNLOAD_DIR
+    
+    if not os.path.isdir(target_dir):
+        raise HTTPException(status_code=400, detail="Invalid directory path")
+        
     try:
         if platform.system() == "Windows":
             os.startfile(target_dir)
@@ -106,9 +119,9 @@ async def open_directory(path: Optional[str] = None):
 
 
 class DownloadRequest(BaseModel):
-    video_id: str
-    quality: str  # Beklenen değerler: '1080p', '720p', '480p', 'audio'
-    download_path: Optional[str] = None
+    video_id: str = Field(..., min_length=11, max_length=11, pattern=r"^[a-zA-Z0-9_-]{11}$")
+    quality: str = Field(..., max_length=50)  # Beklenen değerler: '1080p', '720p', '480p', 'audio', vb.
+    download_path: Optional[str] = Field(None, max_length=1024)
 
 # Global dictionary to track active downloads for cancellation
 active_downloads = {}
@@ -116,10 +129,13 @@ active_downloads = {}
 cancel_flags = {}
 
 @app.get("/search")
-async def search(q: str, max_results: int = 10):
+@limiter.limit("100/minute")
+async def search(request: Request, q: str, max_results: int = 10):
     """
     Simulates a search via yt-dlp without needing YouTube Data API.
     """
+    if len(q) > 100:
+        raise HTTPException(status_code=400, detail="Query too long")
     ydl_opts = {
         'extract_flat': True,
         'quiet': True,
@@ -144,11 +160,14 @@ async def search(q: str, max_results: int = 10):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/suggestions")
-async def get_suggestions(q: str):
+@limiter.limit("120/minute")
+async def get_suggestions(request: Request, q: str):
     """
     Fetches search suggestions from YouTube's autocomplete API.
     Returns: { "suggestions": ["sug1", "sug2", ...] }
     """
+    if len(q) > 100:
+        raise HTTPException(status_code=400, detail="Query too long")
     import requests
     try:
         url = f"http://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q={q}"
@@ -169,14 +188,18 @@ async def get_suggestions(q: str):
 
 # /suggest alias — same response format as /suggestions
 @app.get("/suggest")
-async def suggest_alias(q: str):
-    return await get_suggestions(q)
+@limiter.limit("120/minute")
+async def suggest_alias(request: Request, q: str):
+    return await get_suggestions(request, q)
 
 @app.get("/info/{video_id}")
-async def get_info(video_id: str):
+@limiter.limit("60/minute")
+async def get_info(request: Request, video_id: str):
     """
     Returns basic metadata and available download quality options for the specified video.
     """
+    if not re.match(r"^[a-zA-Z0-9_-]{11}$", video_id):
+        raise HTTPException(status_code=400, detail="Invalid video ID")
     url = f"https://www.youtube.com/watch?v={video_id}"
     ydl_opts = {
         'cookiefile': 'cookies.txt',
@@ -439,33 +462,40 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
         threading.Thread(target=_cleanup_on_cancel, daemon=True).start()
 
 @app.post("/cancel/{video_id}")
-async def cancel_download(video_id: str):
+@limiter.limit("120/minute")
+async def cancel(request: Request, video_id: str):
     """
     Cancels an active download. Sets both cancel_flags and active_downloads flag.
     """
+    if not re.match(r"^[a-zA-Z0-9_-]{11}$", video_id):
+        raise HTTPException(status_code=400, detail="Invalid video ID")
     cancel_flags[video_id] = True
     active_downloads[video_id] = False
     return {"status": "success", "message": "Cancel request sent"}
 
 @app.post("/download")
-async def download(request: DownloadRequest, background_tasks: BackgroundTasks):
+@limiter.limit("60/minute")
+async def download(request: Request, req: DownloadRequest, background_tasks: BackgroundTasks):
     """
     Starts the download using FastAPI Background Tasks.
     """
-    background_tasks.add_task(download_video_sync, request.video_id, request.quality, request.download_path)
+    background_tasks.add_task(download_video_sync, req.video_id, req.quality, req.download_path)
     return {
         "status": "success",
-        "message": f"Download task ({request.quality}) started in background.",
-        "video_id": request.video_id,
-        "download_directory": request.download_path or DOWNLOAD_DIR
+        "message": f"Download task ({req.quality}) started in background.",
+        "video_id": req.video_id,
+        "download_directory": req.download_path or DOWNLOAD_DIR
     }
 
 @app.get("/video-info")
-async def get_video_info(video_id: str):
+@limiter.limit("60/minute")
+async def get_video_info(request: Request, video_id: str):
     """
     Endpoint that fetches video info without downloading.
     Returns resolutions and filesize list in MB.
     """
+    if not re.match(r"^[a-zA-Z0-9_-]{11}$", video_id):
+        raise HTTPException(status_code=400, detail="Invalid video ID")
     url = f"https://www.youtube.com/watch?v={video_id}"
     ydl_opts = {'quiet': True}
     try:
@@ -498,10 +528,14 @@ async def get_video_info(video_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/progress/{video_id}")
-async def get_progress(video_id: str):
+@limiter.limit("120/minute")
+async def get_progress(request: Request, video_id: str):
     """
     Returns the real-time download progress from the JSON file created by yt-dlp hooks.
     """
+    if not re.match(r"^[a-zA-Z0-9_-]{11}$", video_id):
+        return {"progress": 0, "speed": "0.0 MB/s", "eta": 0}
+        
     import json
     progress_file = os.path.join(DOWNLOAD_DIR, f"{video_id}_progress.json")
     if os.path.exists(progress_file):
@@ -514,7 +548,15 @@ async def get_progress(video_id: str):
     return {"progress": 0, "speed": "0.0 MB/s", "eta": 0}
 
 @app.get("/play")
-async def play_local_file(filepath: str):
-    if not os.path.exists(filepath):
+@limiter.limit("120/minute")
+async def play_local_file(request: Request, filepath: str):
+    abs_filepath = os.path.abspath(filepath)
+    if not os.path.exists(abs_filepath):
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(filepath)
+        
+    # Basic protection against arbitrary file reads (e.g., .env, passwords)
+    valid_extensions = ('.mp4', '.m4a', '.webm', '.mp3', '.mkv')
+    if not abs_filepath.lower().endswith(valid_extensions):
+        raise HTTPException(status_code=403, detail="Only media files can be played")
+        
+    return FileResponse(abs_filepath)
