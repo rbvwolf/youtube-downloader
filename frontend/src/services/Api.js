@@ -189,6 +189,16 @@ export default {
         }
     },
 
+    openDirectory: async () => {
+        try {
+            const response = await api.get('/api/open_directory');
+            return response.data;
+        } catch (error) {
+            console.error("Open Directory Error:", error);
+            throw error;
+        }
+    },
+
     // Used for constructing absolute URLs (DownloadContext / LocalPlayerModal)
     getBaseURL: () => BASE_URL,
 };

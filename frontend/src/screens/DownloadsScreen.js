@@ -5,6 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useDownloads } from '../context/DownloadContext';
 import LocalPlayerModal from '../components/LocalPlayerModal';
 import { useToast } from '../context/ToastContext';
+import api from '../services/Api';
 
 export default function DownloadsScreen() {
     const { theme, t } = useTheme();
@@ -31,16 +32,30 @@ export default function DownloadsScreen() {
                 <View style={styles.header}>
                     <View style={styles.rowBetween}>
                         <Text style={styles.headerTitle}>{t('downloadsTitle')}</Text>
-                    <TouchableOpacity
-                        style={[styles.iconBtn, { cursor: 'pointer' }]}
-                        onPress={async () => {
-                            if (completedDownloads.length === 0) return;
-                            await clearHistory();
-                            showToast('Tum gecmis temizlendi.', 'success');
-                        }}
-                    >
-                        <MaterialIcons name="delete-outline" size={24} color={theme.text} />
-                    </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <TouchableOpacity
+                                style={[styles.iconBtn, { cursor: 'pointer', marginRight: 8 }]}
+                                onPress={async () => {
+                                    try {
+                                        await api.openDirectory();
+                                    } catch (e) {
+                                        showToast('Failed to open directory.', 'error');
+                                    }
+                                }}
+                            >
+                                <MaterialIcons name="folder-open" size={24} color={theme.text} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.iconBtn, { cursor: 'pointer' }]}
+                                onPress={async () => {
+                                    if (completedDownloads.length === 0) return;
+                                    await clearHistory();
+                                    showToast('Tum gecmis temizlendi.', 'success');
+                                }}
+                            >
+                                <MaterialIcons name="delete-outline" size={24} color={theme.text} />
+                            </TouchableOpacity>
+                        </View>
                     </View>
 
                     <View style={{ height: 40, marginTop: 16 }}>

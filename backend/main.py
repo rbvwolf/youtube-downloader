@@ -88,6 +88,21 @@ async def pick_directory():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/open_directory")
+async def open_directory():
+    import platform
+    import subprocess
+    try:
+        if platform.system() == "Windows":
+            os.startfile(DOWNLOAD_DIR)
+        elif platform.system() == "Darwin":
+            subprocess.Popen(["open", DOWNLOAD_DIR])
+        else:
+            subprocess.Popen(["xdg-open", DOWNLOAD_DIR])
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 class DownloadRequest(BaseModel):
     video_id: str
