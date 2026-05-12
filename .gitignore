@@ -9,4 +9,6 @@ frontend/node_modules/
 backend/cookies.txt
 backend/downloads/
 *.cookie
-.env
+.env
+
+memory-bank/
