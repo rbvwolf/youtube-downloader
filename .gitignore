@@ -9,10 +9,4 @@ frontend/node_modules/
 backend/cookies.txt
 backend/downloads/
 *.cookie
-.env
-
-memory-bank/
-Phase*.md
-Implementation*.md
-Task*.md
-walkthrough*.md
+.env
