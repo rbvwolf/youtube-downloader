@@ -71,13 +71,13 @@ export default function QualitySelectionModal({
 
     const getFormatUI = (format) => {
         const sizeVal = realSizes[format.quality] || format.size || '-- MB';
-        const str = format.quality.toLowerCase();
-        if (str.includes('audio') || str.includes('mp3')) {
-            return { icon: 'headphones', badge: 'MP3', desc: t('audioOnly'), size: sizeVal };
-        }
-        if (str.includes('1080')) return { icon: 'hd', badge: 'Full HD', desc: t('bestQuality'), size: sizeVal };
-        if (str.includes('720')) return { icon: 'hd', badge: 'HD', desc: t('goodForPhones'), size: sizeVal };
-        if (str.includes('480')) return { icon: 'sd', badge: 'STD', desc: t('dataSaver'), size: sizeVal };
+        const q = format.quality.toLowerCase();
+        if (q === 'audio_m4a') return { icon: 'headphones', badge: 'M4A', desc: 'M4A Audio (iTunes)', size: sizeVal };
+        if (q === 'audio_webm') return { icon: 'headphones', badge: 'WEBM', desc: 'WebM Audio', size: sizeVal };
+        if (q === 'audio' || q.includes('mp3')) return { icon: 'headphones', badge: 'MP3', desc: t('audioOnly'), size: sizeVal };
+        if (q.includes('1080')) return { icon: 'hd', badge: 'Full HD', desc: t('bestQuality'), size: sizeVal };
+        if (q.includes('720')) return { icon: 'hd', badge: 'HD', desc: t('goodForPhones'), size: sizeVal };
+        if (q.includes('480')) return { icon: 'sd', badge: 'STD', desc: t('dataSaver'), size: sizeVal };
         return { icon: 'videocam', badge: 'MP4', desc: t('standard'), size: sizeVal };
     };
 

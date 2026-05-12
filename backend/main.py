@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional
@@ -12,33 +11,44 @@ import subprocess
 
 app = FastAPI(title="Youtube-Downloader API")
 
-# Frontend (React Native) ile haberleşebilmek için CORS ayarları
+import pathlib
+
+# CORS Configuration for Frontend (React Native) communication
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=".*",  # allow_origins=["*"] ile allow_credentials=True çakıştığından regex kullanıldı
+    allow_origin_regex=".*",  # Used regex because allow_origins=["*"] conflicts with allow_credentials=True
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# İstek doğrultusunda videoların kaydedileceği dizin
-# Dinamik: backend'in çalıştığı klasörün altında 'downloads/' oluşturulur.
-# Ortam değişkeni ile override edilebilir: DOWNLOAD_DIR=/custom/path
-DOWNLOAD_DIR = os.environ.get("DOWNLOAD_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "downloads"))
+# Directory where videos will be saved
+# Dynamic: defaults to the OS's user 'Downloads' directory
+# Can be overridden via environment variable: DOWNLOAD_DIR=/custom/path
+default_downloads = str(pathlib.Path.home() / "Downloads")
+DOWNLOAD_DIR = os.environ.get("DOWNLOAD_DIR", default_downloads)
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-# Frontend'in indirilen dosyalara doğrudan erişebilmesi için StaticFiles tanımlaması
-app.mount("/downloads", StaticFiles(directory=DOWNLOAD_DIR), name="downloads")
+# /downloads/{filename} — tarayıcıya zorla indirme yaptıran endpoint
+@app.get("/downloads/{filename:path}")
+async def serve_download(filename: str):
+    filepath = os.path.join(DOWNLOAD_DIR, filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="Dosya bulunamadı")
+    return FileResponse(
+        filepath,
+        filename=os.path.basename(filepath)
+    )
 
 
 def check_ffmpeg():
-    """Sistemde FFmpeg kurulu olup olmadığını kontrol eder."""
+    """Checks if FFmpeg is installed on the system."""
     if shutil.which("ffmpeg") is None:
         print("\n" + "="*60)
-        print("⚠️  UYARI: FFmpeg bulunamadı!")
-        print("   FFmpeg olmadan 1080p/720p video indirmeleri")
-        print("   (video+ses birleştirme) başarısız olacaktır.")
-        print("   Kurulum: https://ffmpeg.org/download.html")
+        print("⚠️  WARNING: FFmpeg not found!")
+        print("   Without FFmpeg, 1080p/720p video downloads")
+        print("   (video+audio merging) will fail.")
+        print("   Installation: https://ffmpeg.org/download.html")
         print("   Windows: winget install ffmpeg")
         print("   Linux:   sudo apt install ffmpeg")
         print("   macOS:   brew install ffmpeg")
@@ -47,12 +57,36 @@ def check_ffmpeg():
         try:
             result = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, timeout=5)
             version_line = result.stdout.split("\n")[0] if result.stdout else "unknown version"
-            print(f"✅ FFmpeg bulundu: {version_line}")
+            print(f"✅ FFmpeg found: {version_line}")
         except Exception:
-            print("✅ FFmpeg bulundu.")
+            print("✅ FFmpeg found.")
 
 check_ffmpeg()
-print(f"📁 İndirme dizini: {DOWNLOAD_DIR}")
+print(f"📁 Download directory: {DOWNLOAD_DIR}")
+
+import asyncio
+
+def _open_picker():
+    import tkinter as tk
+    from tkinter import filedialog
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes('-topmost', True)
+    folder_path = filedialog.askdirectory(parent=root, title="Select Download Folder")
+    root.destroy()
+    return folder_path
+
+@app.get("/api/get_download_dir")
+async def get_download_dir():
+    return {"path": DOWNLOAD_DIR}
+
+@app.get("/api/pick_directory")
+async def pick_directory():
+    try:
+        folder_path = await asyncio.to_thread(_open_picker)
+        return {"path": folder_path}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 class DownloadRequest(BaseModel):
@@ -62,13 +96,13 @@ class DownloadRequest(BaseModel):
 
 # Global dictionary to track active downloads for cancellation
 active_downloads = {}
-# Hızlı iptal flag'leri — progress_hook anında kontrol eder
+# Quick cancellation flags — checked during progress_hook
 cancel_flags = {}
 
 @app.get("/search")
 async def search(q: str, max_results: int = 10):
     """
-    YouTube Data API kullanmadan yt-dlp üzerinden arama simülasyonu yapar.
+    Simulates a search via yt-dlp without needing YouTube Data API.
     """
     ydl_opts = {
         'extract_flat': True,
@@ -76,7 +110,7 @@ async def search(q: str, max_results: int = 10):
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # ytsearch ile API key gereksinimi olmadan arama
+            # ytsearch without API key
             result = ydl.extract_info(f"ytsearch{max_results}:{q}", download=False)
             entries = result.get('entries', [])
             
@@ -125,7 +159,7 @@ async def suggest_alias(q: str):
 @app.get("/info/{video_id}")
 async def get_info(video_id: str):
     """
-    Belirtilen videonun temel meta verilerini ve indirme kalite opsiyonlarını döner.
+    Returns basic metadata and available download quality options for the specified video.
     """
     url = f"https://www.youtube.com/watch?v={video_id}"
     ydl_opts = {
@@ -201,7 +235,7 @@ async def get_info(video_id: str):
             return {
                 "details": {
                     "id": video_id,
-                    "title": "Video Bilgisi Alınamadı (Bot Koruması)",
+                    "title": "Failed to fetch video info (Bot Protection)",
                     "thumbnail": "https://via.placeholder.com/320x180?text=Bot+Protection",
                     "duration": 0
                 },
@@ -220,7 +254,7 @@ async def get_info(video_id: str):
 
 def download_video_sync(video_id: str, quality: str, download_path: str = None):
     """
-    Arka planda çalışan yt-dlp indirme ve ffmpeg birleştirme fonksiyonu.
+    Background yt-dlp download and ffmpeg merging function.
     """
     url = f"https://www.youtube.com/watch?v={video_id}"
     
@@ -231,8 +265,8 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
         'cookiefile': 'cookies.txt',
         'js_runtimes': {'node': {}},
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
-        'concurrent_fragment_downloads': 10,  # 25-30 Mbps hedef hız için artırıldı
-        'buffersize': 1024 * 64,               # 64KB buffer — daha akıcı yazma
+        'concurrent_fragment_downloads': 4,  # Reduced to 4 to limit speed and prevent bot protection
+        'buffersize': 1024 * 64,               # 64KB buffer for smoother writes
         'nocheckcertificate': True,
         'youtube_include_dash_manifest': False,
     }
@@ -240,16 +274,15 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
     progress_file = os.path.join(DOWNLOAD_DIR, f"{video_id}_progress.json")
     
     def progress_hook(d):
-        # Hızlı iptal kontrolü — cancel_flags veya eski active_downloads
+        # Fast cancellation check — checked via cancel_flags or active_downloads
         if cancel_flags.get(video_id) or not active_downloads.get(video_id, True):
             raise Exception('CANCELLED')
 
         if d['status'] == 'downloading':
             try:
                 percent = d.get('_percent_str', '0.0%').strip()
-                # Clean up ansi escape sequences from yt-dlp strings
-                import re
-                percent = re.sub(r'\x1b[^m]*m', '', percent)
+                import re as _re
+                percent = _re.sub(r'\x1b[^m]*m', '', percent)
 
                 speed_bytes = d.get('speed')
                 if speed_bytes:
@@ -263,45 +296,38 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
                 import json
                 with open(progress_file, 'w') as f:
                     json.dump({"progress": percent.replace('%', ''), "speed": speed_str, "eta": eta}, f)
-            except Exception as e:
+            except Exception:
                 pass
-        elif d['status'] == 'finished':
-            try:
-                import json
-                original_filepath = d.get('info_dict', {}).get('filepath', d.get('filename', ''))
-                
-                if not original_filepath:
-                    return
+        # 'finished' status only arrives when raw file is downloaded (pre-ffmpeg)
+        # We send the completion signal in postprocessor_hook.
 
-                actual_d = os.path.dirname(original_filepath)
-                final_filename = os.path.basename(original_filepath)
-                
-                # Mirror the replacements done by the Exec post-processor
-                final_filename = final_filename.replace('.mpg.mp3', '.mp3').replace('.mp4.mp3', '.mp3')
-                final_filename = final_filename.replace('.webm.mp3', '.mp3').replace('.m4a.mp3', '.mp3')
-                import re
-                final_filename = re.sub(r'\.mpg (\d+p)\.mp4', r' \1.mp4', final_filename)
-                final_filename = re.sub(r'\.mp4 (\d+p)\.mp4', r' \1.mp4', final_filename)
-                final_filename = re.sub(r'\.webm (\d+p)\.mp4', r' \1.mp4', final_filename)
-                
-                final_filepath = os.path.join(actual_d, final_filename)
-                
-                with open(progress_file, 'w') as f:
-                    json.dump({"progress": "100", "speed": "Done", "eta": 0, "completed": True, "filename": final_filepath}, f)
-                # Keep the progress file alive for 15s so frontend can reliably read completed+filename
-                import threading
-                def _cleanup():
-                    import time
-                    time.sleep(15)
-                    try:
-                        if os.path.exists(progress_file):
-                            os.remove(progress_file)
-                    except: pass
-                threading.Thread(target=_cleanup, daemon=True).start()
-            except Exception as e:
-                print("Finished hook error:", e)
+    def postprocessor_hook(d):
+        """Called after ALL processing (including ffmpeg conversion) is finished."""
+        if d.get('status') != 'finished':
+            return
+        try:
+            import json
+            final_filepath = d.get('info_dict', {}).get('filepath') or d.get('filename', '')
+            if not final_filepath:
+                return
+            with open(progress_file, 'w') as f:
+                json.dump({"progress": "100", "speed": "Done", "eta": 0, "completed": True, "filename": final_filepath}, f)
+            # Clear progress file after 15 seconds
+            import threading
+            def _cleanup():
+                import time
+                time.sleep(15)
+                try:
+                    if os.path.exists(progress_file):
+                        os.remove(progress_file)
+                except:
+                    pass
+            threading.Thread(target=_cleanup, daemon=True).start()
+        except Exception as e:
+            print("Postprocessor hook error:", e)
 
     ydl_opts['progress_hooks'] = [progress_hook]
+    ydl_opts['postprocessor_hooks'] = [postprocessor_hook]
 
     # Use outtmpl with a python function or a specific replacement to strip .mpg if it exists in the title
     # yt-dlp 2023+ allows python dicts. We will just use the standard template, but clean up the title using the 'replace' or 'autonumber' no, just use a custom outtmpl class or postprocessor.
@@ -309,7 +335,7 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
     
     if quality.startswith('audio'):
         ydl_opts['outtmpl'] = os.path.join(actual_dir, '%(title)s.%(ext)s')
-        
+
         if quality == 'audio_m4a':
             ydl_opts['format'] = 'bestaudio[ext=m4a]/bestaudio/best'
             ydl_opts['postprocessors'] = [{
@@ -319,29 +345,20 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
             }]
         elif quality == 'audio_webm':
             ydl_opts['format'] = 'bestaudio[ext=webm]/bestaudio/best'
+            # WebM audio codec is downloaded without conversion, no extra postprocessor needed
         else:
+            # audio → MP3
             ydl_opts['format'] = 'bestaudio/best'
             ydl_opts['postprocessors'] = [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
                 'preferredquality': '192',
-            }, {
-                'key': 'Exec',
-                'exec_cmd': 'python -c "import os, sys; p = sys.argv[1]; d, f = os.path.split(p); f_new = f.replace(\'.mpg.mp3\', \'.mp3\').replace(\'.mp4.mp3\', \'.mp3\'); os.rename(p, os.path.join(d, f_new)) if f != f_new else None"',
-                'when': 'post_process'
             }]
     else:
-        # User requested: "Başlık 1080p.mp4"
+        # Video quality — format: "Title 1080p.mp4"
         ydl_opts['outtmpl'] = os.path.join(actual_dir, f'%(title)s {quality}.%(ext)s')
-        
-        # Geri Dönüş: Katı Standart Format
         ydl_opts['format'] = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
         ydl_opts['merge_output_format'] = 'mp4'
-        ydl_opts['postprocessors'] = [{
-            'key': 'Exec',
-            'exec_cmd': f'python -c "import os, sys; p = sys.argv[1]; d, f = os.path.split(p); f_new = f.replace(\'.mpg {quality}.mp4\', \' {quality}.mp4\').replace(\'.mp4 {quality}.mp4\', \' {quality}.mp4\'); os.rename(p, os.path.join(d, f_new)) if f != f_new else None"',
-            'when': 'post_process'
-        }]
 
     try:
         active_downloads[video_id] = True
@@ -350,22 +367,22 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
     except yt_dlp.utils.DownloadError as e:
         error_msg = str(e)
         if 'Sign in to confirm' in error_msg or 'bot' in error_msg.lower():
-            print(f"[Bot Koruması] {video_id}: YouTube IP banı veya JS challenge çözülemedi.")
+            print(f"[Bot Protection] {video_id}: YouTube IP ban or JS challenge failed.")
             try:
                 import json
                 with open(progress_file, 'w') as f:
-                    json.dump({"error": "YouTube Bot Koruması Devrede. Lütfen IP değiştirin veya 5 dk bekleyin", "formats": []}, f)
+                    json.dump({"error": "YouTube Bot Protection Triggered. Please change IP or wait 5 mins", "formats": []}, f)
             except: pass
             return
         
         is_cancelled = 'CANCELLED' in str(e)
-        print(f"{'İptal edildi' if is_cancelled else 'İndirme başarısız'} {video_id}: {e}")
+        print(f"{'Cancelled' if is_cancelled else 'Download failed'} {video_id}: {e}")
     except Exception as e:
         is_cancelled = 'CANCELLED' in str(e)
-        print(f"{'İptal edildi' if is_cancelled else 'İndirme başarısız'} {video_id}: {e}")
+        print(f"{'Cancelled' if is_cancelled else 'Download failed'} {video_id}: {e}")
 
         if is_cancelled:
-            # İptal edilen indirmeye ait tüm geçici dosyaları temizle
+            # Clean up all temporary files for the cancelled download
             import glob
             patterns = [
                 os.path.join(actual_dir, f'*.part'),
@@ -376,10 +393,10 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
                 for temp_file in glob.glob(pattern):
                     try:
                         os.remove(temp_file)
-                        print(f"[Cleanup] Silindi: {temp_file}")
+                        print(f"[Cleanup] Deleted: {temp_file}")
                     except Exception as ce:
-                        print(f"[Cleanup] Silinemedi {temp_file}: {ce}")
-            # Geçici ilerleme dosyasını hemen sil
+                        print(f"[Cleanup] Failed to delete {temp_file}: {ce}")
+            # Delete the temporary progress file immediately
             try:
                 if os.path.exists(progress_file):
                     os.remove(progress_file)
@@ -394,7 +411,7 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
         cancel_flags.pop(video_id, None)
         if video_id in active_downloads:
             del active_downloads[video_id]
-        # Hata/iptal durumunda progress dosyasını 5s sonra sil
+        # Delete progress file after 5s on error/cancel
         import threading
         def _cleanup_on_cancel():
             import time
@@ -408,21 +425,21 @@ def download_video_sync(video_id: str, quality: str, download_path: str = None):
 @app.post("/cancel/{video_id}")
 async def cancel_download(video_id: str):
     """
-    Aktif indirmeyi iptal eder. Hem cancel_flags hem de active_downloads flag'ini set eder.
+    Cancels an active download. Sets both cancel_flags and active_downloads flag.
     """
     cancel_flags[video_id] = True
     active_downloads[video_id] = False
-    return {"status": "success", "message": "İptal isteği gönderildi"}
+    return {"status": "success", "message": "Cancel request sent"}
 
 @app.post("/download")
 async def download(request: DownloadRequest, background_tasks: BackgroundTasks):
     """
-    FastAPI Background Tasks kullanarak indirmeyi başlatır.
+    Starts the download using FastAPI Background Tasks.
     """
     background_tasks.add_task(download_video_sync, request.video_id, request.quality, request.download_path)
     return {
         "status": "success",
-        "message": f"İndirme işlemi ({request.quality}) arka planda başlatıldı.",
+        "message": f"Download task ({request.quality}) started in background.",
         "video_id": request.video_id,
         "download_directory": request.download_path or DOWNLOAD_DIR
     }
@@ -430,8 +447,8 @@ async def download(request: DownloadRequest, background_tasks: BackgroundTasks):
 @app.get("/video-info")
 async def get_video_info(video_id: str):
     """
-    İndirme yapmadan sadece video bilgilerini çeken endpoint.
-    Mevcut formatların çözünürlüklerini ve filesize listesini MB döner.
+    Endpoint that fetches video info without downloading.
+    Returns resolutions and filesize list in MB.
     """
     url = f"https://www.youtube.com/watch?v={video_id}"
     ydl_opts = {'quiet': True}

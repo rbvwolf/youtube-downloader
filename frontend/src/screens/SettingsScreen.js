@@ -7,6 +7,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useDownloads } from '../context/DownloadContext';
 import { useToast } from '../context/ToastContext';
 import { useSearchHistory } from '../context/SearchContext';
+import api from '../services/Api';
 
 export default function SettingsScreen() {
     const { theme, themePref, setAppTheme, language, setAppLanguage, setFontSize, t } = useTheme();
@@ -15,44 +16,38 @@ export default function SettingsScreen() {
     const { clearRecentSearches } = useSearchHistory();
     const styles = useMemo(() => createStyles(theme), [theme]);
 
-    const [pathModalVisible, setPathModalVisible] = useState(false);
-    const [pathInputValue, setPathInputValue] = useState('');
-
     const handlePickDirectory = async () => {
         if (Platform.OS === 'web') {
-            // Web'de tarayici API'si (showDirectoryPicker) HTTPS gerektiriyor ve
-            // backend'in anlayacagi bir path donmuyor. Kullanicinin path'i manuel
-            // girmesi en guvenilir cozum.
-            setPathInputValue(downloadPath || '');
-            setPathModalVisible(true);
+            try {
+                const result = await api.pickDirectory();
+                if (result && result.path) {
+                    await updateDownloadPath(result.path);
+                    showToast(t('downloadLocation') + ' updated.', 'success');
+                } else {
+                    showToast('Folder selection cancelled.', 'info');
+                }
+            } catch (err) {
+                console.error('Failed to pick directory via API', err);
+                showToast('Failed to select folder.', 'error');
+            }
         } else if (Platform.OS === 'android') {
             try {
                 const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
                 if (permissions.granted) {
                     await updateDownloadPath(permissions.directoryUri);
-                    showToast('Indirme klasoru guncellendi.', 'success');
+                    showToast(t('downloadLocation') + ' updated.', 'success');
                 }
             } catch (err) {
                 console.error('Failed to pick directory', err);
-                showToast('Klasor secimi basarisiz.', 'error');
+                showToast('Failed to select folder.', 'error');
             }
         } else {
-            showToast('Bu platformda klasor secici desteklenmiyor.', 'info');
+            showToast('Directory picker not supported on this platform.', 'info');
         }
-    };
-
-    const handleSavePath = async () => {
-        const trimmed = pathInputValue.trim();
-        if (!trimmed) {
-            showToast('Lutfen gecerli bir yol girin.', 'error');
-            return;
-        }
-        await updateDownloadPath(trimmed);
-        setPathModalVisible(false);
-        showToast('Indirme klasoru kaydedildi.', 'success');
     };
 
     return (
+        <>
         <SafeAreaView style={styles.container}>
             <View style={styles.contentContainer}>
                 <View style={styles.header}>
@@ -194,55 +189,7 @@ export default function SettingsScreen() {
             </View>
 
         </SafeAreaView>
-
-        {/* Web klasor yolu gircisi modal */}
-        <Modal
-            visible={pathModalVisible}
-            transparent
-            animationType="fade"
-            onRequestClose={() => setPathModalVisible(false)}
-        >
-            <View style={styles.modalOverlay}>
-                <View style={[styles.modalContent, { backgroundColor: theme.card, borderColor: theme.border }]}>
-                    <Text style={[styles.modalTitle, { color: theme.text }]}>Indirme Klasoru</Text>
-                    <Text style={[styles.modalSubtitle, { color: theme.subText }]}>
-                        Backend'in erisebilecegi tam klasor yolunu girin.{'
-'}
-                        Ornek: C:\Users\karay\Downloads
-                    </Text>
-                    <TextInput
-                        style={[
-                            styles.textInput,
-                            {
-                                color: theme.text,
-                                borderColor: theme.border,
-                                backgroundColor: theme.searchBackground,
-                            }
-                        ]}
-                        value={pathInputValue}
-                        onChangeText={setPathInputValue}
-                        placeholder="Ornek: C:\Users\karay\Downloads"
-                        placeholderTextColor={theme.iconInactive}
-                        autoFocus
-                        onSubmitEditing={handleSavePath}
-                    />
-                    <View style={styles.modalActions}>
-                        <TouchableOpacity
-                            style={[styles.modalBtn, { backgroundColor: theme.chipInactiveBg, cursor: 'pointer' }]}
-                            onPress={() => setPathModalVisible(false)}
-                        >
-                            <Text style={[styles.modalBtnText, { color: theme.subText }]}>Iptal</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.modalBtn, { backgroundColor: theme.primary, cursor: 'pointer' }]}
-                            onPress={handleSavePath}
-                        >
-                            <Text style={[styles.modalBtnText, { color: '#fff' }]}>Kaydet</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            </View>
-        </Modal>
+        </>
     );
 }
 

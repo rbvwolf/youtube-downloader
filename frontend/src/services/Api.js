@@ -169,6 +169,26 @@ export default {
         }
     },
 
-    // Tarayıcı indirme URL'si oluşturmak için kullanılır (DownloadContext)
+    pickDirectory: async () => {
+        try {
+            const response = await api.get('/api/pick_directory');
+            return response.data;
+        } catch (error) {
+            console.error("Pick Directory Error:", error);
+            throw error;
+        }
+    },
+
+    getDefaultDownloadDir: async () => {
+        try {
+            const response = await api.get('/api/get_download_dir');
+            return response.data;
+        } catch (error) {
+            console.error("Get Default Download Dir Error:", error);
+            throw error;
+        }
+    },
+
+    // Used for constructing absolute URLs (DownloadContext / LocalPlayerModal)
     getBaseURL: () => BASE_URL,
 };

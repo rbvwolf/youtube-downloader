@@ -2,15 +2,16 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useToast } from '../context/ToastContext';
+import api from '../services/Api';
 
 export default function LocalPlayerModal({ visible, item, onClose, theme, t }) {
     const { showToast } = useToast();
 
     if (!item || !item.filename) return null;
 
-    // Extract just the filename from the full OS path, then serve via static /downloads/ mount
+    // Use absolute path with /play endpoint to support custom download directories
     const basename = item.filename.split(/[/\\]/).pop();
-    const fileUrl = `http://127.0.0.1:8000/downloads/${encodeURIComponent(basename)}`;
+    const fileUrl = `${api.getBaseURL()}/play?filepath=${encodeURIComponent(item.filename)}`;
 
     // Detect audio: quality='audio' OR .mp3 extension
     const isAudio = item.quality === 'audio' || (basename || '').toLowerCase().endsWith('.mp3');

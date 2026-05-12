@@ -28,15 +28,26 @@ export const DownloadProvider = ({ children }) => {
     useEffect(() => {
         const load = async () => {
             try {
-                // Tamamlanan indirmeleri SQLite'tan çek
+                // Fetch completed downloads from DB
                 const rows = await getAllDownloads();
                 setCompletedDownloads(rows);
 
-                // Kaydedilmiş indirme yolunu AsyncStorage'dan al
+                // Get saved download path from AsyncStorage
                 const savedPath = await AsyncStorage.getItem('@download_path');
-                if (savedPath) setDownloadPath(savedPath);
+                if (savedPath) {
+                    setDownloadPath(savedPath);
+                } else {
+                    try {
+                        const defaultDir = await api.getDefaultDownloadDir();
+                        if (defaultDir && defaultDir.path) {
+                            setDownloadPath(defaultDir.path);
+                        }
+                    } catch (err) {
+                        console.error('[DownloadContext] Default path error:', err);
+                    }
+                }
             } catch (e) {
-                console.error('[DownloadContext] Yükleme hatası:', e);
+                console.error('[DownloadContext] Load error:', e);
             }
         };
         load();
@@ -119,24 +130,6 @@ export const DownloadProvider = ({ children }) => {
             if (data.completed === true && data.filename) {
                 clearInterval(intervalsRef.current[video.id]);
                 delete intervalsRef.current[video.id];
-
-                // Web'de tarayıcıya dosyayı indir
-                if (Platform.OS === 'web' && typeof document !== 'undefined') {
-                    try {
-                        const filename = data.filename.replace(/\\/g, '/').split('/').pop();
-                        const downloadUrl = `${api.getBaseURL()}/downloads/${encodeURIComponent(filename)}`;
-                        const link = document.createElement('a');
-                        link.href = downloadUrl;
-                        link.download = filename;
-                        link.style.display = 'none';
-                        document.body.appendChild(link);
-                        link.click();
-                        setTimeout(() => document.body.removeChild(link), 2000);
-                        console.log('[Download] Tarayıcı indirmesi başlatıldı:', downloadUrl);
-                    } catch (e) {
-                        console.error('[Download] Web indirme tetiklenemedi:', e);
-                    }
-                }
 
                 // SQLite'a kaydet ve state'i güncelle
                 setTimeout(async () => {

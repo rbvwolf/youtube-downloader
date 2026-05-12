@@ -160,7 +160,7 @@ export default function DownloadsScreen() {
                                                             {isAudio ? 'Ses' : item.quality}
                                                         </Text>
                                                     </View>
-                                                    <Text style={styles.cardSubText}>{item.downloadedAt ? new Date(item.downloadedAt).toLocaleDateString() : t('completed')}</Text>
+                                                    <Text style={styles.cardSubText}>{item.downloadedAt ? new Date(item.downloadedAt).toLocaleString() : t('completed')}</Text>
                                                 </View>
                                             )}
                                         </View>
