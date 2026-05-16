@@ -39,14 +39,22 @@ export default {
 
     getSuggestions: async (query) => {
         // Her ortamda (web & native) kendi backend /suggestions ucunu kullanıyoruz.
-        // Doğrudan Google/YouTube'a istek atmak CORS hatasına yol açıyordu;
-        // backend bu engeli sunucu tarafında aşarak sonucu iletir.
         try {
             const response = await api.get('/suggestions', { params: { q: query } });
             return response.data;
         } catch (error) {
             console.error('Suggestions API Error:', error);
             return { suggestions: [] };
+        }
+    },
+
+    getPlaylistDetails: async (playlistId, limit = 100, offset = 0) => {
+        try {
+            const response = await api.get(`/playlist/${playlistId}`, { params: { limit, offset } });
+            return response.data;
+        } catch (error) {
+            console.error('Playlist API Error:', error);
+            throw error;
         }
     },
 
@@ -137,4 +145,14 @@ export default {
 
     // Used for constructing absolute URLs (DownloadContext / LocalPlayerModal)
     getBaseURL: () => BASE_URL,
+
+    deleteFile: async (filepath) => {
+        try {
+            const response = await api.delete('/file', { data: { filepath } });
+            return response.data;
+        } catch (error) {
+            console.error('Delete File Error:', error);
+            throw error;
+        }
+    },
 };

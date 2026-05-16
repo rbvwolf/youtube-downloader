@@ -63,9 +63,14 @@ export const DownloadProvider = ({ children }) => {
         }
     };
 
-    // Belirli bir indirmeyi sil (SQLite + state)
+    // Belirli bir indirmeyi sil (SQLite + state + disk)
     const removeDownload = async (videoId, quality) => {
         try {
+            // Disk'ten sil (filename varsa)
+            const entry = completedDownloads.find(d => d.id === videoId && d.quality === quality);
+            if (entry?.filename) {
+                try { await api.deleteFile(entry.filename); } catch { /* dosya yoksa sorun değil */ }
+            }
             await dbDeleteDownload(videoId, quality);
             setCompletedDownloads(prev =>
                 prev.filter(d => !(d.id === videoId && d.quality === quality))
@@ -75,9 +80,15 @@ export const DownloadProvider = ({ children }) => {
         }
     };
 
-    // Tüm geçmişi temizle (SQLite + state)
+    // Tüm geçmişi temizle (SQLite + state + disk)
     const clearHistory = async () => {
         try {
+            // Tüm dosyaları diskten sil
+            for (const entry of completedDownloads) {
+                if (entry?.filename) {
+                    try { await api.deleteFile(entry.filename); } catch { /* devam et */ }
+                }
+            }
             await clearAllDownloads();
             setCompletedDownloads([]);
         } catch (e) {
@@ -107,13 +118,18 @@ export const DownloadProvider = ({ children }) => {
     };
 
     // İndirme başlatıldığında progress polling döngüsünü başlat
-    const startSimulation = (video, quality) => {
+    const startSimulation = (video, quality, playlistMeta = {}) => {
         // Aynı video için çift başlatmayı engelle
         if (activeDownloads[video.id] || intervalsRef.current[video.id]) return;
 
         setActiveDownloads(prev => ({
             ...prev,
-            [video.id]: { progress: 0, timeLeft: 0, speed: '--', video, quality },
+            [video.id]: {
+                progress: 0, timeLeft: 0, speed: '--', video, quality,
+                playlist_id:    playlistMeta?.playlist_id    ?? null,
+                playlist_title: playlistMeta?.playlist_title ?? null,
+                startedAt:      Date.now(),
+            },
         }));
 
         const interval = setInterval(async () => {
@@ -138,6 +154,8 @@ export const DownloadProvider = ({ children }) => {
                         quality,
                         downloadedAt: new Date().toISOString(),
                         filename: data.filename,
+                        playlist_id:    playlistMeta?.playlist_id    ?? null,
+                        playlist_title: playlistMeta?.playlist_title ?? null,
                     };
 
                     try {
@@ -178,6 +196,7 @@ export const DownloadProvider = ({ children }) => {
             setActiveDownloads(prev => ({
                 ...prev,
                 [video.id]: {
+                    ...prev[video.id],   // playlist_id, playlist_title, startedAt korunur
                     progress: currentProgress.toFixed(1),
                     timeLeft: timeRemaining,
                     speed: currentSpeed,

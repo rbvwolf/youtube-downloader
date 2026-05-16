@@ -54,8 +54,18 @@ export const SearchProvider = ({ children }) => {
         }
     };
 
+    const removeRecentSearch = async (query) => {
+        try {
+            const updated = recentSearches.filter(q => q !== query);
+            setRecentSearches(updated);
+            await AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+        } catch (e) {
+            console.error('Failed to remove recent search', e);
+        }
+    };
+
     return (
-        <SearchContext.Provider value={{ recentSearches, saveRecentSearch, clearRecentSearches, loadRecentSearches }}>
+        <SearchContext.Provider value={{ recentSearches, saveRecentSearch, clearRecentSearches, loadRecentSearches, removeRecentSearch }}>
             {children}
         </SearchContext.Provider>
     );

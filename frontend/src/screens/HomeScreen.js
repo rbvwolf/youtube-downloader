@@ -57,7 +57,7 @@ export default function HomeScreen({ navigation }) {
     const { theme, t } = useTheme();
     const { showToast } = useToast();
     const { startSimulation } = useDownloads();
-    const { recentSearches, saveRecentSearch, clearRecentSearches, loadRecentSearches } = useSearchHistory();
+    const { recentSearches, saveRecentSearch, clearRecentSearches, loadRecentSearches, removeRecentSearch } = useSearchHistory();
     const styles = useMemo(() => createStyles(theme), [theme]);
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -194,16 +194,39 @@ export default function HomeScreen({ navigation }) {
         return () => clearTimeout(timeoutId);
     }, [searchQuery, recentSearches, t]);
 
+    const PLAYLIST_QUERY_RE = /[?&]list=[A-Za-z0-9_-]{6,}|^PL[A-Za-z0-9_-]{6,}$/;
+
     const handleSearch = (queryToSearch) => {
-        const query = (queryToSearch || searchQuery).trim();
+        let query = (queryToSearch || searchQuery).trim();
         if (!query) return;
 
-        saveRecentSearch(query);
+        // Geçmişten "📋 Title|ID" formatında geldiyse asıl ID'yi/URL'yi al
+        if (query.startsWith('📋 ') && query.includes('|')) {
+            query = query.split('|')[1].trim();
+        }
+
+        // Playlist URL/ID ise kaydetme — SearchResultsScreen başlığıyla kaydedecek
+        if (!PLAYLIST_QUERY_RE.test(query)) {
+            saveRecentSearch(query);
+        }
         setSearchQuery('');
         setSuggestions([]);
         setIsSearchFocused(false);
         isTouchingSuggestion.current = false;
         navigation.navigate('SearchResults', { query });
+    };
+
+    // Arama geçmişi chip'lerinde gösterilecek kısaltilmış etiket
+    const getChipLabel = (query) => {
+        if (query.startsWith('📋 ') && query.includes('|')) {
+            const title = query.split('|')[0].replace('📋 ', '').trim();
+            return `📋 ${title.length > 32 ? title.slice(0, 30) + '…' : title}`;
+        }
+        const plMatch = /[?&]list=([A-Za-z0-9_-]{6,})/.exec(query);
+        if (plMatch) return `📋 ${plMatch[1].slice(0, 16)}…`;
+        if (/^PL[A-Za-z0-9_-]{6,}$/.test(query.trim())) return `📋 ${query.trim().slice(0, 16)}…`;
+        if (query.length > 32) return query.slice(0, 30) + '…';
+        return query;
     };
 
     // Öneri ok butonuna basılınca: aramayı tetikleme, sadece inputu doldur
@@ -407,6 +430,9 @@ export default function HomeScreen({ navigation }) {
                                     <MaterialIcons name="close" size={20} color={theme.iconInactive} />
                                 </TouchableOpacity>
                             )}
+                            <TouchableOpacity onPress={() => handleSearch(searchQuery)} style={{ padding: 8, cursor: 'pointer', backgroundColor: theme.isDark ? '#333' : '#eee', borderRadius: 20, marginRight: 4 }}>
+                                <MaterialIcons name="search" size={20} color={theme.text} />
+                            </TouchableOpacity>
                             <TouchableOpacity
                                 onPress={startVoiceSearch}
                                 style={[styles.micButton, { cursor: 'pointer' }]}
@@ -489,15 +515,26 @@ export default function HomeScreen({ navigation }) {
                                     <Text style={[styles.filterChipText, { color: '#fff' }]}>{t(itemKey)}</Text>
                                 </TouchableOpacity>
                             ))}
-                            {/* History Chips */}
+                            {/* History Chips — X ile tek tek silinebilir */}
                             {recentSearches.map((item, index) => (
-                                <TouchableOpacity
+                                <View
                                     key={`history-${index}`}
-                                    style={[styles.filterChip, { cursor: 'pointer' }]}
-                                    onPress={() => handleSearch(item)}
+                                    style={[styles.filterChip, { flexDirection: 'row', alignItems: 'center', marginRight: 8, marginBottom: 12, paddingRight: 6 }]}
                                 >
-                                    <Text style={styles.filterChipText}>{item}</Text>
-                                </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={{ cursor: 'pointer' }}
+                                        onPress={() => handleSearch(item)}
+                                    >
+                                        <Text style={styles.filterChipText}>{getChipLabel(item)}</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={{ marginLeft: 6, padding: 2, cursor: 'pointer' }}
+                                        onPress={() => removeRecentSearch(item)}
+                                        accessibilityLabel={`${item} aramasını sil`}
+                                    >
+                                        <MaterialIcons name="close" size={13} color={theme.iconInactive} />
+                                    </TouchableOpacity>
+                                </View>
                             ))}
                         </View>
                     </View>

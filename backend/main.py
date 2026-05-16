@@ -128,34 +128,115 @@ active_downloads = {}
 # Quick cancellation flags — checked during progress_hook
 cancel_flags = {}
 
+import re as _url_re
+
+_PLAYLIST_URL_RE = _url_re.compile(r'[?&]list=([A-Za-z0-9_-]{10,})')
+_PLAYLIST_ID_RE = _url_re.compile(r'^PL[A-Za-z0-9_-]{10,}$')
+_VIDEO_URL_RE   = _url_re.compile(r'(?:youtube\.com/watch\?v=|youtu\.be/)([A-Za-z0-9_-]{11})')
+
 @app.get("/search")
 @limiter.limit("100/minute")
 async def search(request: Request, q: str, max_results: int = 10):
     """
-    Simulates a search via yt-dlp without needing YouTube Data API.
+    Searches YouTube via yt-dlp.
+    If q is a playlist URL/ID, returns a single playlist result.
+    Otherwise performs a regular keyword search.
     """
-    if len(q) > 100:
+    q = q.strip()
+    if len(q) > 300:
         raise HTTPException(status_code=400, detail="Query too long")
-    ydl_opts = {
-        'extract_flat': True,
-        'quiet': True,
-    }
+
+    ydl_opts = {'extract_flat': True, 'quiet': True}
+
+    # --- Playlist URL / ID detection ---
+    playlist_match = _PLAYLIST_URL_RE.search(q)
+    playlist_id = playlist_match.group(1) if playlist_match else (q if _PLAYLIST_ID_RE.match(q) else None)
+
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # ytsearch without API key
+            if playlist_id:
+                url = f"https://www.youtube.com/playlist?list={playlist_id}"
+                info = ydl.extract_info(url, download=False)
+                entries = [e for e in (info.get('entries') or []) if e][:max_results]
+                # Thumbnail: ilk video thumbnailinden al
+                thumb = ''
+                for e in entries:
+                    thumbs = e.get('thumbnails') or []
+                    if thumbs:
+                        thumb = thumbs[-1].get('url', '')
+                        break
+                playlist_result = {
+                    "is_playlist": True,
+                    "id": info.get("id"),
+                    "playlist_id": info.get("id"),
+                    "title": info.get("title"),
+                    "channel": info.get("uploader") or info.get("channel") or "",
+                    "video_count": info.get("playlist_count") or len(entries),
+                    "thumbnail": thumb,
+                    "thumbnails": [thumb],
+                    "duration": None,
+                    "view_count": None,
+                }
+                return {"results": [playlist_result]}
+
+            # --- Normal keyword search ---
             result = ydl.extract_info(f"ytsearch{max_results}:{q}", download=False)
             entries = result.get('entries', [])
-            
             search_results = []
             for entry in entries:
+                if not entry:
+                    continue
                 search_results.append({
                     "id": entry.get("id"),
                     "title": entry.get("title"),
                     "thumbnails": entry.get("thumbnails"),
                     "duration": entry.get("duration"),
-                    "view_count": entry.get("view_count")
+                    "view_count": entry.get("view_count"),
+                    "is_playlist": False,
                 })
             return {"results": search_results}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/playlist/{playlist_id}")
+@limiter.limit("30/minute")
+async def get_playlist(request: Request, playlist_id: str, limit: int = 100, offset: int = 0):
+    """
+    Returns metadata + video list for a playlist.
+    Response: { playlist_id, title, channel, video_count, videos: [{id, title, thumbnail, duration}] }
+    """
+    if not re.match(r'^[A-Za-z0-9_-]{10,100}$', playlist_id):
+        raise HTTPException(status_code=400, detail="Invalid playlist ID")
+
+    url = f"https://www.youtube.com/playlist?list={playlist_id}"
+    ydl_opts = {
+        'extract_flat': True,
+        'quiet': True,
+        'playliststart': offset + 1,
+        'playlistend': offset + limit,
+    }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            entries = [e for e in (info.get('entries') or []) if e]
+            videos = []
+            for e in entries:
+                thumbs = e.get('thumbnails') or []
+                thumb = thumbs[-1].get('url') if thumbs else f"https://i.ytimg.com/vi/{e.get('id')}/hqdefault.jpg"
+                videos.append({
+                    "id": e.get("id"),
+                    "title": e.get("title"),
+                    "thumbnail": thumb,
+                    "duration": e.get("duration"),
+                })
+            return {
+                "playlist_id": info.get("id"),
+                "title": info.get("title"),
+                "channel": info.get("uploader") or info.get("channel") or "",
+                "video_count": info.get("playlist_count") or len(videos),
+                "videos": videos,
+            }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -568,3 +649,36 @@ async def play_local_file(request: Request, filepath: str):
         raise HTTPException(status_code=403, detail="Only media files can be played")
         
     return FileResponse(abs_filepath)
+
+
+class DeleteFileRequest(BaseModel):
+    filepath: str
+
+@app.delete("/file")
+@limiter.limit("120/minute")
+async def delete_file(request: Request, body: DeleteFileRequest):
+    """
+    Fiziksel olarak bir medya dosyasını diskten siler.
+    Sadece geçerli medya uzantılarına izin verilir.
+    """
+    abs_path = os.path.abspath(body.filepath)
+    valid_ext = ('.mp4', '.m4a', '.webm', '.mp3', '.mkv', '.opus', '.flac')
+
+    # Sadece medya dosyaları silinebilsin
+    if not abs_path.lower().endswith(valid_ext):
+        raise HTTPException(status_code=403, detail="Sadece medya dosyaları silinebilir")
+
+    if not os.path.exists(abs_path):
+        # Dosya zaten yok — başarılı sayılır
+        return {"deleted": False, "reason": "not_found"}
+
+    try:
+        os.remove(abs_path)
+        # Boş kalan playlist klasörünü de temizle
+        parent = os.path.dirname(abs_path)
+        if parent and os.path.isdir(parent) and not os.listdir(parent):
+            os.rmdir(parent)
+        return {"deleted": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Silme hatası: {str(e)}")
+

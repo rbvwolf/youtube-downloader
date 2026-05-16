@@ -33,15 +33,17 @@ async function webInsert(item) {
     // Aynı video_id + quality çifti varsa güncelle
     const idx = rows.findIndex(r => r.id === (item.id ?? '') && r.quality === (item.quality ?? ''));
     const newEntry = {
-        id:           item.id          ?? '',
-        title:        item.title       ?? '',
-        thumbnail:    item.thumbnail   ?? '',
-        channel:      item.channel     ?? '',
-        quality:      item.quality     ?? '',
-        downloadedAt: item.downloadedAt ?? new Date().toISOString(),
-        filename:     item.filename    ?? '',
-        duration:     item.duration    ?? '',
-        views:        item.views       ?? '',
+        id:             item.id             ?? '',
+        title:          item.title          ?? '',
+        thumbnail:      item.thumbnail      ?? '',
+        channel:        item.channel        ?? '',
+        quality:        item.quality        ?? '',
+        downloadedAt:   item.downloadedAt   ?? new Date().toISOString(),
+        filename:       item.filename       ?? '',
+        duration:       item.duration       ?? '',
+        views:          item.views          ?? '',
+        playlist_id:    item.playlist_id    ?? null,
+        playlist_title: item.playlist_title ?? null,
     };
     if (idx >= 0) {
         rows[idx] = newEntry;
@@ -82,9 +84,14 @@ async function getNativeDatabase() {
             downloaded_at TEXT,
             filename      TEXT,
             duration      TEXT,
-            views         TEXT
+            views         TEXT,
+            playlist_id   TEXT,
+            playlist_title TEXT
         );
     `);
+    // Migration: mevcut DB'ye yeni sütunlar ekle (varsa hata yoksay)
+    await _db.execAsync(`ALTER TABLE downloads ADD COLUMN playlist_id TEXT`).catch(() => {});
+    await _db.execAsync(`ALTER TABLE downloads ADD COLUMN playlist_title TEXT`).catch(() => {});
     return _db;
 }
 
@@ -92,18 +99,20 @@ async function nativeInsert(item) {
     const db = await getNativeDatabase();
     await db.runAsync(
         `INSERT OR REPLACE INTO downloads
-            (video_id, title, thumbnail, channel, quality, downloaded_at, filename, duration, views)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            (video_id, title, thumbnail, channel, quality, downloaded_at, filename, duration, views, playlist_id, playlist_title)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-            item.id          ?? '',
-            item.title       ?? '',
-            item.thumbnail   ?? '',
-            item.channel     ?? '',
-            item.quality     ?? '',
-            item.downloadedAt ?? new Date().toISOString(),
-            item.filename    ?? '',
-            item.duration    ?? '',
-            item.views       ?? '',
+            item.id             ?? '',
+            item.title          ?? '',
+            item.thumbnail      ?? '',
+            item.channel        ?? '',
+            item.quality        ?? '',
+            item.downloadedAt   ?? new Date().toISOString(),
+            item.filename       ?? '',
+            item.duration       ?? '',
+            item.views          ?? '',
+            item.playlist_id    ?? null,
+            item.playlist_title ?? null,
         ]
     );
 }
@@ -112,15 +121,17 @@ async function nativeGetAll() {
     const db = await getNativeDatabase();
     const rows = await db.getAllAsync('SELECT * FROM downloads ORDER BY downloaded_at DESC');
     return rows.map(row => ({
-        id:           row.video_id,
-        title:        row.title,
-        thumbnail:    row.thumbnail,
-        channel:      row.channel,
-        quality:      row.quality,
-        downloadedAt: row.downloaded_at,
-        filename:     row.filename,
-        duration:     row.duration,
-        views:        row.views,
+        id:             row.video_id,
+        title:          row.title,
+        thumbnail:      row.thumbnail,
+        channel:        row.channel,
+        quality:        row.quality,
+        downloadedAt:   row.downloaded_at,
+        filename:       row.filename,
+        duration:       row.duration,
+        views:          row.views,
+        playlist_id:    row.playlist_id    ?? null,
+        playlist_title: row.playlist_title ?? null,
     }));
 }
 
