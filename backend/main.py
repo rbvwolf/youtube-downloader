@@ -168,15 +168,23 @@ async def get_suggestions(request: Request, q: str):
     """
     if len(q) > 100:
         raise HTTPException(status_code=400, detail="Query too long")
-    import requests
+    import urllib.request
+    import urllib.parse
+    import json as _json
     try:
-        url = f"http://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q={q}"
-        response = requests.get(url, timeout=5, headers={
-            'Accept-Language': 'tr-TR,tr;q=0.9',
-            'User-Agent': 'Mozilla/5.0'
-        })
-        response.raise_for_status()
-        data = response.json()  # Format: ["query", ["sug1", "sug2", ...]]
+        encoded_q = urllib.parse.quote(q)
+        url = f"https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q={encoded_q}"
+        req = urllib.request.Request(
+            url,
+            headers={
+                'Accept-Language': 'tr-TR,tr;q=0.9',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'application/json',
+            }
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            raw = resp.read().decode('utf-8')
+        data = _json.loads(raw)
         if isinstance(data, list) and len(data) > 1 and isinstance(data[1], list):
             suggestions = [s for s in data[1] if isinstance(s, str)]
             print(f"[Suggestions] q='{q}' => {suggestions[:5]}")

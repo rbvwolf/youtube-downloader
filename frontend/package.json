@@ -6,7 +6,9 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "web:fast": "expo start --web",
+    "web:reset": "expo start --web --clear"
   },
   "dependencies": {
     "@expo/metro-runtime": "~3.2.3",

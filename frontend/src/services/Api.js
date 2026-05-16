@@ -26,62 +26,6 @@ const api = axios.create({
     baseURL: BASE_URL,
 });
 
-// Web'de fetch ile YouTube autocomplete API'yi doğrudan çağır.
-// clients1.google.com/complete/search — CORS başlığı olan, tarayıcı erişimine açık endpoint.
-async function fetchSuggestionsWeb(query) {
-    // Farklı URL'leri sırayla dene
-    const urls = [
-        `https://clients1.google.com/complete/search?client=youtube&hl=tr&gl=TR&q=${encodeURIComponent(query)}&callback=a`,
-        `https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=${encodeURIComponent(query)}`,
-        `https://clients1.google.com/complete/search?client=firefox&ds=yt&q=${encodeURIComponent(query)}`,
-    ];
-
-    // 2. URL: firefox client JSON döner, fetch ile CORS olur
-    try {
-        const res = await fetch(
-            `https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=${encodeURIComponent(query)}`,
-            { headers: { 'Accept': 'application/json' } }
-        );
-        if (res.ok) {
-            const data = await res.json();
-            console.log('[Suggest] firefox fetch raw:', data);
-            if (Array.isArray(data) && data.length > 1 && Array.isArray(data[1])) {
-                return data[1].filter(s => typeof s === 'string').slice(0, 10);
-            }
-        }
-    } catch (e) {
-        console.log('[Suggest] firefox fetch hatası:', e.message);
-    }
-
-    // JSONP fallback (CSP kısıtlaması yoksa çalışır)
-    return new Promise((resolve) => {
-        const cbName = `__yt_cb_${Date.now()}`;
-        const script = document.createElement('script');
-        const timer = setTimeout(() => { cleanup(); resolve([]); }, 3000);
-
-        const cleanup = () => {
-            clearTimeout(timer);
-            delete window[cbName];
-            script.parentNode && script.parentNode.removeChild(script);
-        };
-
-        window[cbName] = (data) => {
-            cleanup();
-            console.log('[Suggest] JSONP raw data:', data);
-            if (Array.isArray(data) && data.length > 1 && Array.isArray(data[1])) {
-                resolve(data[1].filter(s => typeof s === 'string').slice(0, 10));
-            } else {
-                resolve([]);
-            }
-        };
-
-        script.src = `https://clients1.google.com/complete/search?client=youtube&hl=tr&gl=TR&q=${encodeURIComponent(query)}&callback=${cbName}`;
-        script.onload = () => console.log('[Suggest] JSONP script yüklendi');
-        script.onerror = (e) => { console.log('[Suggest] JSONP CSP bloğu veya ağ hatası:', e); cleanup(); resolve([]); };
-        document.head.appendChild(script);
-    });
-}
-
 export default {
     searchVideos: async (query) => {
         try {
@@ -94,22 +38,14 @@ export default {
     },
 
     getSuggestions: async (query) => {
-        if (Platform.OS === 'web' && typeof document !== 'undefined') {
-            try {
-                const suggestions = await fetchSuggestionsWeb(query);
-                console.log('Gelen Öneriler (web):', suggestions);
-                return { suggestions };
-            } catch (e) {
-                console.log('Web Suggest hatası:', e);
-                return { suggestions: [] };
-            }
-        }
-        // Native: backend üzerinden
+        // Her ortamda (web & native) kendi backend /suggestions ucunu kullanıyoruz.
+        // Doğrudan Google/YouTube'a istek atmak CORS hatasına yol açıyordu;
+        // backend bu engeli sunucu tarafında aşarak sonucu iletir.
         try {
             const response = await api.get('/suggestions', { params: { q: query } });
             return response.data;
         } catch (error) {
-            console.error("Suggestions API Error:", error);
+            console.error('Suggestions API Error:', error);
             return { suggestions: [] };
         }
     },

@@ -18,7 +18,7 @@ const RECENT_SEARCHES_KEY = '@recent_searches';
 const DEFAULT_CHIPS = ['Music', 'Podcasts', 'News'];
 
 // YouTube-style suggestion row with hover effect
-function SuggestionRow({ item, isHistory, renderText, theme, styles, onPress }) {
+function SuggestionRow({ item, isHistory, renderText, theme, styles, onPress, onFill }) {
     const [hovered, setHovered] = React.useState(false);
     return (
         <TouchableOpacity
@@ -39,10 +39,13 @@ function SuggestionRow({ item, isHistory, renderText, theme, styles, onPress }) 
                 style={{ marginRight: 14, flexShrink: 0 }}
             />
             <View style={{ flex: 1 }}>{renderText()}</View>
-            {/* Arrow to fill current query with suggestion */}
+            {/* Arama kutusunu o öneriyle dolduran ok — aramayı başlatmaz */}
             <TouchableOpacity
                 style={{ padding: 8, cursor: 'pointer' }}
-                onPress={(e) => { e?.stopPropagation?.(); }}
+                onPress={(e) => {
+                    e?.stopPropagation?.();
+                    onFill && onFill(item);
+                }}
             >
                 <MaterialIcons name="north-west" size={16} color={theme.iconInactive} />
             </TouchableOpacity>
@@ -61,6 +64,8 @@ export default function HomeScreen({ navigation }) {
     const [suggestions, setSuggestions] = useState([]);
     const [isListening, setIsListening] = useState(false);
     const [isSearchFocused, setIsSearchFocused] = useState(false);
+    // Blur race condition önleyici: bir öneriye dokunulurken focus'u kapama
+    const isTouchingSuggestion = useRef(false);
 
     const [trendingVideos, setTrendingVideos] = useState([]);
     const [loadingTrending, setLoadingTrending] = useState(false);
@@ -197,7 +202,14 @@ export default function HomeScreen({ navigation }) {
         setSearchQuery('');
         setSuggestions([]);
         setIsSearchFocused(false);
+        isTouchingSuggestion.current = false;
         navigation.navigate('SearchResults', { query });
+    };
+
+    // Öneri ok butonuna basılınca: aramayı tetikleme, sadece inputu doldur
+    const handleFillQuery = (suggestion) => {
+        setSearchQuery(suggestion);
+        setIsSearchFocused(true);
     };
 
     // Renders suggestion text: typed portion normal, suggested suffix bold
@@ -380,7 +392,14 @@ export default function HomeScreen({ navigation }) {
                                 onChangeText={setSearchQuery}
                                 onSubmitEditing={() => handleSearch(searchQuery)}
                                 onFocus={() => setIsSearchFocused(true)}
-                                onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
+                                onBlur={() => {
+                                    // Öneri listesine dokunuluyorsa focus'u kaybettirme
+                                    setTimeout(() => {
+                                        if (!isTouchingSuggestion.current) {
+                                            setIsSearchFocused(false);
+                                        }
+                                    }, 300);
+                                }}
                                 returnKeyType="search"
                             />
                             {searchQuery.length > 0 && (
@@ -409,7 +428,11 @@ export default function HomeScreen({ navigation }) {
                                             renderText={() => renderSuggestionText(item)}
                                             theme={theme}
                                             styles={styles}
-                                            onPress={() => handleSearch(item)}
+                                            onPress={() => {
+                                                isTouchingSuggestion.current = true;
+                                                handleSearch(item);
+                                            }}
+                                            onFill={handleFillQuery}
                                         />
                                     );
                                 })}
